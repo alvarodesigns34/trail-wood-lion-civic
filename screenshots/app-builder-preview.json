@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "DESTRUCT LAB",
+      "hasCanvas": false,
+      "bodyTextLen": 310,
+      "bodyTextHash": "2ecc3e27733ef64bc0a31dd8def1a7cfea8833c26288175e78945b5b372240a0",
+      "bodyTextPrefix": "SIMULACIÓN ESTRUCTURAL DESTRUCT LAB Laboratorio cinemático de de",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "DESTRUCT LAB",
+      "hasCanvas": false,
+      "bodyTextLen": 310,
+      "bodyTextHash": "2ecc3e27733ef64bc0a31dd8def1a7cfea8833c26288175e78945b5b372240a0",
+      "bodyTextPrefix": "SIMULACIÓN ESTRUCTURAL DESTRUCT LAB Laboratorio cinemático de de",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
