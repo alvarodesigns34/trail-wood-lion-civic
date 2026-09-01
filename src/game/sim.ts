@@ -35,6 +35,17 @@ const FREE_RELEASE_DV = 0.32;
 const STRUCT_RELEASE_DV = 1.15;
 /** Salto de velocidad a partir del cual consideramos que hubo impacto (m/s). */
 const IMPACT_MIN_DV = 2.2;
+/**
+ * Velocidad vertical ascendente máxima de una pieza estructural fuera de una
+ * explosión. Un derrumbe puede lanzar cascotes, pero un forjado de treinta
+ * toneladas nunca sube: si el solver de contactos genera esa energía, es un
+ * artefacto numérico y se recorta.
+ */
+const MAX_STRUCTURAL_UP = 6;
+/** Velocidad máxima absoluta de cualquier cuerpo (m/s). */
+const MAX_SPEED = 60;
+/** Ventana tras una explosión en la que sí se admiten velocidades altas. */
+const BLAST_GRACE = 0.35;
 /** Transmisión de la onda a través de una pieza intacta. */
 const SHIELD_BASE = 0.3;
 /** Número máximo de escombros vivos a la vez. */
@@ -101,6 +112,7 @@ export interface SimBody {
   pendingImpulsePoint: Vec3 | null;
   pendingTorque: Vec3 | null;
   pendingVelocity: Vec3 | null;
+  pendingAngVel: Vec3 | null;
 
   prevVel: Vec3;
   impactCooldown: number;
@@ -234,6 +246,7 @@ class Simulation {
 
   chainWindow = 0;
   chainCount = 0;
+  lastBlastAt = -99;
 
   private scoreListeners = new Set<ScoreListener>();
   private fxListeners = new Set<() => void>();
@@ -275,6 +288,7 @@ class Simulation {
     this.debrisAlive = 0;
     this.chainWindow = 0;
     this.chainCount = 0;
+    this.lastBlastAt = -99;
   }
 
   /* ---------------------------------------------------------------- */
@@ -299,8 +313,8 @@ class Simulation {
       density: mass / volume,
       mass,
       resistance: input.resistance,
-      strength: strengthOf(frame, input.resistance),
-      toughness: toughnessOf(frame, input.resistance),
+      strength: strengthOf(frame, input.resistance, input.kind),
+      toughness: toughnessOf(frame, input.resistance, input.kind),
       brittle: materialOf(input.material).brittle,
       integrity: 1,
       damageTaken: 0,
@@ -325,6 +339,7 @@ class Simulation {
       pendingImpulsePoint: null,
       pendingTorque: null,
       pendingVelocity: null,
+      pendingAngVel: null,
       prevVel: { x: 0, y: 0, z: 0 },
       impactCooldown: 0,
       freeTime: 0,
@@ -439,6 +454,18 @@ class Simulation {
         );
         sb.pendingVelocity = null;
       }
+      if (sb.pendingAngVel) {
+        const a = rb.angvel();
+        rb.setAngvel(
+          {
+            x: a.x + sb.pendingAngVel.x,
+            y: a.y + sb.pendingAngVel.y,
+            z: a.z + sb.pendingAngVel.z,
+          },
+          true,
+        );
+        sb.pendingAngVel = null;
+      }
       if (sb.pendingImpulse) {
         if (sb.pendingImpulsePoint) {
           rb.applyImpulseAtPoint(sb.pendingImpulse, sb.pendingImpulsePoint, true);
@@ -506,6 +533,7 @@ class Simulation {
   explode(x: number, y: number, z: number, charge: number, radius: number) {
     const w = Math.max(0.05, charge);
     const r = Math.max(1.5, radius);
+    this.lastBlastAt = this.simTime;
     const scale = Math.min(1, Math.cbrt(w) / 8);
     this.trauma = Math.min(1, this.trauma + 0.12 + scale * 0.7);
     this.flash = Math.min(1, 0.18 + scale * 0.85);
@@ -880,17 +908,33 @@ class Simulation {
       if (sb.releaseIn >= 0 && sb.attached && !sb.destroyed) {
         sb.releaseIn -= dt;
         if (sb.releaseIn <= 0) {
-          // Sesgo de caída hacia el lado dañado: pequeño y en velocidad, para
-          // que no dependa de la masa y nunca se convierta en un lanzamiento.
+          // Al soltarse, la pieza sólo recibe dos cosas: una desviación hacia
+          // el lado por el que le hicieron daño y una asimetría mínima. Ambas
+          // son velocidades (no impulsos), así que no dependen de la masa y
+          // nunca se convierten en un lanzamiento. La gravedad hace el resto.
           const dd = sb.damageDir;
           const len = Math.hypot(dd.x, dd.z);
+          const ang = Math.random() * Math.PI * 2;
+          const wobble = 0.25 + Math.random() * 0.45;
+          let vx = Math.cos(ang) * wobble;
+          let vz = Math.sin(ang) * wobble;
           if (len > 0.01) {
-            const k = Math.min(0.75, len * 0.5);
-            sb.pendingVelocity = { x: (dd.x / len) * k, y: 0, z: (dd.z / len) * k };
-            sb.pendingTorque = {
-              x: (dd.z / len) * sb.mass * 0.035,
-              y: (Math.random() - 0.5) * sb.mass * 0.008,
-              z: -(dd.x / len) * sb.mass * 0.035,
+            const k = Math.min(0.9, len * 0.6);
+            vx += (dd.x / len) * k;
+            vz += (dd.z / len) * k;
+          }
+          sb.pendingVelocity = { x: vx, y: 0, z: vz };
+          // El giro se fija como velocidad angular, no como impulso: un torque
+          // proporcional a la masa dividido entre la inercia de un forjado de
+          // treinta toneladas es indistinguible de cero, y por eso las plantas
+          // caían perfectamente alineadas y volvían a apilarse como un mueble.
+          const lean = Math.hypot(vx, vz);
+          const spin = 0.18 + Math.random() * 0.4;
+          if (lean > 0.001) {
+            sb.pendingAngVel = {
+              x: (vz / lean) * spin,
+              y: (Math.random() - 0.5) * 0.25,
+              z: -(vx / lean) * spin,
             };
           }
           this.release(sb);
@@ -952,11 +996,45 @@ class Simulation {
       sb.prevVel.x = v.x;
       sb.prevVel.y = v.y;
       sb.prevVel.z = v.z;
+      this.clampVelocity(sb, rb, v);
       if (sb.impactCooldown > 0) continue;
       const dv = Math.hypot(dvx, dvy, dvz);
       if (dv >= IMPACT_MIN_DV) impacts.push({ sb, dv });
     }
     for (const { sb, dv } of impacts) this.resolveImpact(sb, dv);
+  }
+
+  /**
+   * El solver de contactos puede inventar energía cuando chocan cuerpos con
+   * masas muy dispares o muy interpenetrados. Aquí se le pone freno: nada sube
+   * como un cohete sin una explosión reciente detrás.
+   */
+  private clampVelocity(sb: SimBody, rb: RapierRigidBody, v: { x: number; y: number; z: number }) {
+    const recentBlast = this.simTime - this.lastBlastAt < BLAST_GRACE;
+    let vx = v.x;
+    let vy = v.y;
+    let vz = v.z;
+    let touched = false;
+    const structural =
+      sb.kind === "floor" || sb.kind === "bridge" || sb.kind === "column" || sb.kind === "core";
+    if (structural && !recentBlast && vy > MAX_STRUCTURAL_UP) {
+      vy = MAX_STRUCTURAL_UP;
+      touched = true;
+    }
+    const speed = Math.hypot(vx, vy, vz);
+    if (speed > MAX_SPEED) {
+      const k = MAX_SPEED / speed;
+      vx *= k;
+      vy *= k;
+      vz *= k;
+      touched = true;
+    }
+    if (touched) {
+      rb.setLinvel({ x: vx, y: vy, z: vz }, false);
+      sb.prevVel.x = vx;
+      sb.prevVel.y = vy;
+      sb.prevVel.z = vz;
+    }
   }
 
   /**
@@ -967,7 +1045,7 @@ class Simulation {
   private resolveImpact(sb: SimBody, dv: number) {
     sb.impactCooldown = 0.1;
     const specific = 0.5 * dv * dv; // J/kg
-    const self = Math.min(0.85, specific / Math.max(1, sb.toughness));
+    const self = Math.min(0.9, specific / Math.max(1, sb.toughness));
     if (self > 0.004) this.damage(sb, self);
 
     const energy = 0.5 * sb.mass * dv * dv;
@@ -990,9 +1068,12 @@ class Simulation {
       if (targets.length >= 5) break;
     }
     if (!targets.length) return;
+    // Reparto de energía en el choque: aproximadamente mitad y mitad entre
+    // quien golpea y lo golpeado. Es lo que hace que un colapso progrese: cada
+    // forjado que cae arruina al de abajo y la pila se va deshaciendo.
     const share = (energy * 0.5) / targets.length;
     for (const t of targets) {
-      const dmg = Math.min(0.9, share / Math.max(1, t.mass * t.toughness));
+      const dmg = Math.min(0.8, share / Math.max(1, t.mass * t.toughness));
       if (dmg > 0.004) this.damage(t, dmg);
     }
     if (energy > 60000) {

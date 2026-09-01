@@ -255,7 +255,8 @@ export default function Scene() {
           paused={paused || timeScale !== 1}
           timeStep={FIXED_DT}
           gravity={[0, -9.81, 0]}
-          numSolverIterations={quality === "alta" ? 8 : 5}
+          numSolverIterations={quality === "alta" ? 12 : 6}
+          contactNaturalFrequency={20}
           interpolate
           colliders={false}
         >

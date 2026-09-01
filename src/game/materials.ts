@@ -36,8 +36,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Hormigón",
     density: 2300,
     strength: 95,
-    toughness: 55,
-    restitution: 0.04,
+    toughness: 200,
+    restitution: 0.02,
     friction: 0.86,
     brittle: 0.62,
     dust: "#b9b2a4",
@@ -47,8 +47,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Hormigón armado",
     density: 2500,
     strength: 175,
-    toughness: 140,
-    restitution: 0.04,
+    toughness: 350,
+    restitution: 0.02,
     friction: 0.88,
     brittle: 0.42,
     dust: "#b3aca0",
@@ -58,8 +58,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Ladrillo",
     density: 1800,
     strength: 32,
-    toughness: 22,
-    restitution: 0.05,
+    toughness: 60,
+    restitution: 0.03,
     friction: 0.9,
     brittle: 0.82,
     dust: "#c09a80",
@@ -69,8 +69,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Acero",
     density: 2200,
     strength: 260,
-    toughness: 620,
-    restitution: 0.16,
+    toughness: 600,
+    restitution: 0.1,
     friction: 0.52,
     brittle: 0.08,
     dust: "#98a0a8",
@@ -80,8 +80,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Metal",
     density: 340,
     strength: 40,
-    toughness: 300,
-    restitution: 0.11,
+    toughness: 170,
+    restitution: 0.08,
     friction: 0.58,
     brittle: 0.1,
     dust: "#9aa2aa",
@@ -91,8 +91,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Madera",
     density: 450,
     strength: 26,
-    toughness: 95,
-    restitution: 0.2,
+    toughness: 66,
+    restitution: 0.15,
     friction: 0.7,
     brittle: 0.45,
     dust: "#a8814e",
@@ -102,8 +102,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Vidrio",
     density: 2500,
     strength: 6,
-    toughness: 5,
-    restitution: 0.05,
+    toughness: 3,
+    restitution: 0.02,
     friction: 0.36,
     brittle: 0.97,
     dust: "#bcd2da",
@@ -113,8 +113,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Roca",
     density: 2700,
     strength: 210,
-    toughness: 90,
-    restitution: 0.08,
+    toughness: 150,
+    restitution: 0.05,
     friction: 0.9,
     brittle: 0.55,
     dust: "#8d8378",
@@ -124,8 +124,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
     label: "Asfalto",
     density: 2300,
     strength: 150,
-    toughness: 70,
-    restitution: 0.03,
+    toughness: 180,
+    restitution: 0.02,
     friction: 0.95,
     brittle: 0.4,
     dust: "#5a5a5c",
@@ -201,15 +201,39 @@ export function massFor(
 }
 
 /**
- * La calidad constructiva (`resistance`, 0-100) modula la resistencia del
- * material sin sustituirla: 50 es la referencia neutra.
+ * Resistencia efectiva a la sobrepresión (kPa).
+ *
+ * El valor del material es el de la materia maciza; una planta entera es un
+ * montaje con fachada, tabiques y huecos, y cede mucho antes que un bloque del
+ * mismo material. La calidad constructiva (`resistance`, 0-100) modula el
+ * resultado: 50 es la referencia neutra.
+ *
+ * Con esta corrección las cifras caen donde deben según las tablas reales de
+ * daño por onda expansiva: una estructura de acero acusa daños graves en torno
+ * a 110 kPa y un edificio de hormigón corriente sobre 45 kPa.
  */
-export function strengthOf(material: string | undefined, resistance: number) {
-  return materialOf(material).strength * (0.45 + Math.max(0, resistance) / 90);
+export function strengthOf(material: string | undefined, resistance: number, kind?: BodyKind) {
+  const assembly = kind ? Math.pow(occupancyFor(kind), 0.45) : 1;
+  return materialOf(material).strength * (0.45 + Math.max(0, resistance) / 90) * assembly;
 }
 
-export function toughnessOf(material: string | undefined, resistance: number) {
-  return materialOf(material).toughness * (0.5 + Math.max(0, resistance) / 100);
+/**
+ * Tenacidad efectiva al impacto (J/kg).
+ *
+ * El valor del material corresponde a la materia maciza. Una planta de edificio
+ * es un montaje hueco: aguanta mucho menos por kilo que un bloque del mismo
+ * material, y por eso un forjado que cae una planta queda destrozado mientras
+ * que una barrera de hormigón que cae tres metros sólo se agrieta.
+ *
+ * Referencias usadas para calibrar:
+ *  - barrera de hormigón cayendo 3 m  → ~20 % de daño
+ *  - coche cayendo 5 m                → ~35 %
+ *  - forjado cayendo una planta       → ~55 %
+ *  - caja de madera cayendo 4 m       → se rompe
+ */
+export function toughnessOf(material: string | undefined, resistance: number, kind?: BodyKind) {
+  const assembly = kind ? occupancyFor(kind) : 1;
+  return materialOf(material).toughness * (0.5 + Math.max(0, resistance) / 100) * assembly;
 }
 
 /** Etiqueta en español del estado de integridad de una pieza. */

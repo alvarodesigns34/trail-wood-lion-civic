@@ -178,9 +178,10 @@ export class StructureSolver {
       if (failed || unsupported) {
         if (lostAt < 0) lostAt = i;
         if (f.releaseIn < 0) {
-          // Propagación: la parte alta tarda un poco más en soltarse, lo justo
-          // para que el colapso se lea como una secuencia y no como un estallido.
-          f.releaseIn = failed && !unsupported ? 0.02 : 0.05 + (i - lostAt) * 0.045;
+          // Propagación: cada planta tarda algo más que la de abajo en perder
+          // el apoyo. El desfase hace que el bloque superior se desgrane al
+          // caer en vez de bajar entero como un ascensor.
+          f.releaseIn = failed && !unsupported ? 0.02 : 0.06 + (i - lostAt) * 0.085;
           f.failReason = failed ? "fallo" : "sin apoyo";
         }
       }

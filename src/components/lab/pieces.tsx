@@ -146,7 +146,11 @@ export function Piece({
       colliders={false}
       linearDamping={0.04}
       angularDamping={0.28}
-      ccd={kind === "meteor" || kind === "debris"}
+      ccd={
+        kind === "meteor" ||
+        kind === "debris" ||
+        (dynamic && (kind === "floor" || kind === "bridge"))
+      }
       canSleep
       {...(linearVelocity ? { linearVelocity } : {})}
       {...(onImpact ? { onCollisionEnter: onImpact } : {})}
