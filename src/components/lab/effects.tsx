@@ -116,16 +116,18 @@ function makeDustGeo(count: number) {
 export function DustViz({ fx }: { fx: DustBurst }) {
   const count = 140;
   const geo = useMemo(() => makeDustGeo(count), []);
+  // El polvo toma el color del material que se ha roto: el hormigón deja una
+  // nube gris clara, el ladrillo una rojiza, el vidrio una azulada.
   const mat = useMemo(
     () =>
       new THREE.PointsMaterial({
-        color: "#c4b49a",
+        color: fx.color ?? "#c4b49a",
         size: 0.48,
         transparent: true,
         opacity: 0.78,
         depthWrite: false,
       }),
-    [],
+    [fx.color],
   );
   const emberGeo = useMemo(() => makeDustGeo(40), []);
   const emberMat = useMemo(

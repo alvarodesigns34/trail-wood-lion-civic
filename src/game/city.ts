@@ -1,4 +1,5 @@
 import type { CatalogItem } from "./types";
+import { massFor } from "./materials";
 
 export const FLOOR_H = 2.75;
 
@@ -66,6 +67,57 @@ export const BUILDINGS = [
     material: "hormigón",
     resistance: 60,
   },
+  // Anillo exterior. Antes esta zona la ocupaban bloques decorativos sin
+  // colisión: parecían parte de la ciudad pero eran indestructibles. Ahora son
+  // edificios reales, simulados como cualquier otro.
+  {
+    id: "west-far-n",
+    name: "Nave oeste norte",
+    x: -40,
+    z: -28,
+    floors: 3,
+    w: 9,
+    d: 7.4,
+    color: "#6f6a62",
+    material: "ladrillo",
+    resistance: 42,
+  },
+  {
+    id: "west-far-s",
+    name: "Bloque oeste lejano",
+    x: -40,
+    z: 22,
+    floors: 5,
+    w: 7.6,
+    d: 7,
+    color: "#7f7869",
+    material: "hormigón",
+    resistance: 56,
+  },
+  {
+    id: "east-far-n",
+    name: "Almacén este",
+    x: 40,
+    z: -30,
+    floors: 2,
+    w: 10,
+    d: 8,
+    color: "#5f6a70",
+    material: "acero",
+    resistance: 50,
+  },
+  {
+    id: "east-far-s",
+    name: "Torre este lejana",
+    x: 40,
+    z: 26,
+    floors: 6,
+    w: 7,
+    d: 7,
+    color: "#4a5560",
+    material: "hormigón",
+    resistance: 58,
+  },
 ] as const;
 
 export type BuildingDef = (typeof BUILDINGS)[number];
@@ -108,7 +160,6 @@ export const CATALOG: CatalogItem[] = [
     w: 1.1,
     h: 4,
     d: 1.1,
-    mass: 220,
     material: "hormigón",
     resistance: 78,
     color: "#8a8378",
@@ -121,7 +172,6 @@ export const CATALOG: CatalogItem[] = [
     w: 6,
     h: 3.2,
     d: 0.55,
-    mass: 280,
     material: "hormigón",
     resistance: 58,
     color: "#7d776e",
@@ -134,7 +184,6 @@ export const CATALOG: CatalogItem[] = [
     w: 6,
     h: 0.5,
     d: 6,
-    mass: 320,
     material: "hormigón",
     resistance: 64,
     color: "#8f897e",
@@ -147,7 +196,6 @@ export const CATALOG: CatalogItem[] = [
     w: 8,
     h: 0.45,
     d: 0.45,
-    mass: 160,
     material: "acero",
     resistance: 82,
     color: "#6a7078",
@@ -160,7 +208,6 @@ export const CATALOG: CatalogItem[] = [
     w: 2,
     h: 2,
     d: 2,
-    mass: 180,
     material: "hormigón",
     resistance: 66,
     color: "#857f74",
@@ -209,7 +256,6 @@ export const CATALOG: CatalogItem[] = [
     w: 4,
     h: 0.65,
     d: 5.4,
-    mass: 360,
     material: "hormigón",
     resistance: 74,
     color: "#7c7a74",
@@ -222,7 +268,6 @@ export const CATALOG: CatalogItem[] = [
     w: 1.2,
     h: 16,
     d: 1.2,
-    mass: 90,
     material: "acero",
     resistance: 40,
     color: "#9aa3ad",
@@ -235,7 +280,6 @@ export const CATALOG: CatalogItem[] = [
     w: 2,
     h: 1.4,
     d: 4.2,
-    mass: 90,
     material: "metal",
     resistance: 35,
     color: "#c45c4a",
@@ -248,7 +292,6 @@ export const CATALOG: CatalogItem[] = [
     w: 2.2,
     h: 2.2,
     d: 5.2,
-    mass: 140,
     material: "metal",
     resistance: 40,
     color: "#4a5a4e",
@@ -261,7 +304,6 @@ export const CATALOG: CatalogItem[] = [
     w: 2.6,
     h: 2.6,
     d: 7.4,
-    mass: 280,
     material: "metal",
     resistance: 48,
     color: "#c9a227",
@@ -274,7 +316,6 @@ export const CATALOG: CatalogItem[] = [
     w: 6,
     h: 2.6,
     d: 2.5,
-    mass: 420,
     material: "acero",
     resistance: 76,
     color: "#3a6e8a",
@@ -287,7 +328,6 @@ export const CATALOG: CatalogItem[] = [
     w: 2.1,
     h: 0.9,
     d: 0.42,
-    mass: 48,
     material: "hormigón",
     resistance: 42,
     color: "#c9b48a",
@@ -300,7 +340,6 @@ export const CATALOG: CatalogItem[] = [
     w: 0.28,
     h: 5.5,
     d: 0.28,
-    mass: 28,
     material: "acero",
     resistance: 22,
     color: "#3a3e44",
@@ -313,7 +352,6 @@ export const CATALOG: CatalogItem[] = [
     w: 1.2,
     h: 1.2,
     d: 1.2,
-    mass: 32,
     material: "madera",
     resistance: 22,
     color: "#8a6a3c",
@@ -326,7 +364,6 @@ export const CATALOG: CatalogItem[] = [
     w: 2.2,
     h: 2.2,
     d: 4.4,
-    mass: 260,
     material: "acero",
     resistance: 60,
     color: "#6a7470",
@@ -339,7 +376,6 @@ export const CATALOG: CatalogItem[] = [
     w: 6,
     h: 2.4,
     d: 8,
-    mass: 500,
     material: "hormigón",
     resistance: 90,
     color: "#6e6a64",
@@ -352,7 +388,6 @@ export const CATALOG: CatalogItem[] = [
     w: 8,
     h: 0.6,
     d: 8,
-    mass: 640,
     material: "hormigón",
     resistance: 92,
     color: "#7a766e",
@@ -365,7 +400,6 @@ export const CATALOG: CatalogItem[] = [
     w: 8,
     h: 3.2,
     d: 1.1,
-    mass: 700,
     material: "hormigón",
     resistance: 88,
     color: "#6c6860",
@@ -400,9 +434,28 @@ export const CHALLENGES: {
   {
     id: "puente",
     title: "Cirugía de puente",
-    brief: "Haz caer el puente utilizando la menor fuerza posible (potencia ≤ 40).",
+    brief: "Haz caer el puente con la carga más pequeña posible (≤ 10 kg de TNT).",
   },
 ];
+
+/**
+ * Masa real (kg) de una pieza del catálogo, deducida de su geometría y su
+ * material igual que en el resto del mundo. Así lo que dice la interfaz y lo
+ * que siente la simulación son la misma cosa.
+ */
+export function catalogMass(item: CatalogItem) {
+  if (item.kind === "building") {
+    const h = FLOOR_H * 0.97;
+    return massFor("floor", item.material, [item.w ?? 6, h, item.d ?? 6]) * (item.floors ?? 4);
+  }
+  if (item.kind === "car") return 1400;
+  if (item.kind === "van") return 2600;
+  if (item.kind === "truck") return 8600;
+  if (item.kind === "lamp") return massFor("prop", "acero", [0.28, 5.5, 0.28], 0.18);
+  if (item.kind === "antenna") return massFor("column", "acero", [0.7, 2.6, 0.7], 0.12) * 6;
+  const kind = item.kind === "bridge-seg" ? "bridge" : item.kind === "ramp" ? "terrain" : "prop";
+  return massFor(kind, item.material, [item.w ?? 2, item.h ?? 2, item.d ?? 2]);
+}
 
 export function catalogById(id: string) {
   return CATALOG.find((c) => c.id === id);

@@ -73,6 +73,7 @@ const boom = (x, y, z, kg, r) =>
   page.evaluate(([x, y, z, kg, r]) => window.__lab.explodeAt(x, y, z, kg, r), [x, y, z, kg, r]);
 const shot = (name) => page.screenshot({ path: `${shotDir}/${name}.png` });
 
+await shot("00-ciudad");
 const base = await probe();
 console.log(`\nMundo inicial: ${base.total} cuerpos\n`);
 check("La escena arranca con cuerpos registrados", base.total > 40, `${base.total} cuerpos`);
@@ -87,6 +88,7 @@ for (const kg of [0.5, 3, 20, 120, 500]) {
   await settle(4);
   const p = await probe();
   ladder.push({ kg, ...p });
+  await shot(`01-carga-${kg}`);
   console.log(
     `  ${String(kg).padStart(5)} kg → sueltos ${String(p.awake).padStart(3)}` +
       ` · destruidos ${String(p.destroyed).padStart(3)}` +
@@ -164,6 +166,12 @@ check(
   `base ${baseHit.awake + baseHit.destroyed} vs alto ${topHit.awake + topHit.destroyed}`,
 );
 await shot("03-colapso-base");
+await reset();
+await boom(18.5, 1.2, 2, 60, 26);
+await settle(3.5);
+await shot("03-colapso-progreso");
+await settle(6);
+await shot("03-colapso-fin");
 
 /* --------------------------------------------------------------- */
 console.log("\n— 4. Explosión lejana: no debe pasar nada —");

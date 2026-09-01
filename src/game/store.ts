@@ -239,7 +239,7 @@ export const useLab = create<LabState>((set, get) => ({
     if (ch === "puente" && sim.bridgeDown()) {
       const last = get().replay.recording[get().replay.recording.length - 1];
       const power = typeof last?.payload.power === "number" ? last.payload.power : 99;
-      challengeStatus = power <= 40 ? "win" : "fail";
+      challengeStatus = power <= 10 ? "win" : "fail";
     }
     if (ch === "puntuacion" && score >= 2500) challengeStatus = "win";
     set({
@@ -271,7 +271,7 @@ export const useLab = create<LabState>((set, get) => ({
       w: cat.w ?? 2,
       h: cat.h ?? 2,
       d: cat.d ?? 2,
-      mass: cat.mass ?? 80,
+      mass: cat.mass ?? 0,
       material: cat.material ?? "hormigón",
       resistance: cat.resistance ?? 50,
       color: cat.color ?? "#8a8378",

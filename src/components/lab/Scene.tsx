@@ -61,6 +61,14 @@ function TimeStepper() {
     sim.postStep(FIXED_DT);
   });
 
+  // `resetWorld` marca la escena como no lista y sólo el `onCreated` del lienzo
+  // la volvía a marcar como lista; como al reiniciar no se recrea el lienzo
+  // sino el mundo de física, el rótulo "Inicializando física" se quedaba
+  // colgado para siempre. Este componente sí se vuelve a montar con el mundo.
+  useEffect(() => {
+    useLab.getState().setSceneReady(true);
+  }, []);
+
   useFrame((_, dt) => {
     const st = useLab.getState();
     const d = Math.min(dt, 0.1);
@@ -219,7 +227,9 @@ function SceneTint() {
   const { scene, gl } = useThree();
   useEffect(() => {
     scene.background = new THREE.Color("#10141a");
-    scene.fog = new THREE.Fog("#10141a", 55, 160);
+    // La niebla llega ahora hasta el horizonte lejano: los bloques de fondo se
+    // ven, pero disueltos, sin poder confundirse con la ciudad simulada.
+    scene.fog = new THREE.Fog("#10141a", 70, 300);
     gl.toneMapping = THREE.ACESFilmicToneMapping;
     gl.toneMappingExposure = 1.12;
     gl.shadowMap.enabled = true;
@@ -241,7 +251,7 @@ export default function Scene() {
       className="absolute inset-0 h-full w-full touch-none"
       shadows
       dpr={quality === "alta" ? [1, 1.5] : [1, 1.1]}
-      camera={{ position: [48, 26, 48], fov: 48, near: 0.1, far: 260 }}
+      camera={{ position: [48, 26, 48], fov: 48, near: 0.1, far: 520 }}
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={() => useLab.getState().setSceneReady(true)}
       onPointerMissed={() => {

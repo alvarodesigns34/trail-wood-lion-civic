@@ -29,7 +29,8 @@ import {
 } from "lucide-react";
 import { useLab, TIME_SCALES } from "@/game/store";
 import { sim } from "@/game/sim";
-import { CATALOG, CHALLENGES, catalogById, materialLabel } from "@/game/city";
+import { CATALOG, CHALLENGES, catalogById, catalogMass, materialLabel } from "@/game/city";
+import { integrityLabel } from "@/game/materials";
 import { bindInput, isTyping } from "@/game/input";
 import { playBoom, playClick, playRumble, playWhoosh, unlockAudio } from "@/game/audio";
 import { parseCommand } from "@/lib/ai/parse-command";
@@ -118,6 +119,12 @@ function applyAction(a: AiAction) {
     default:
       break;
   }
+}
+
+/** Masa legible: kilos hasta una tonelada, toneladas a partir de ahí. */
+function formatMass(kg: number) {
+  if (kg >= 1000) return `${formatEs(Math.round((kg / 1000) * 10) / 10)} t`;
+  return `${formatEs(Math.round(kg))} kg`;
 }
 
 function detonateAt(x?: number, z?: number) {
@@ -484,6 +491,7 @@ function CatalogPanel({ group }: { group: Exclude<LeftTab, "eventos"> }) {
             <span className="mt-0.5 font-mono text-[10px] text-subtle">
               {item.material ? materialLabel(item.material) : "Estructura"}
               {item.w ? ` · ${item.w}×${item.h}×${item.d}` : ""}
+              {` · ${formatMass(catalogMass(item))}`}
             </span>
           </button>
         );
@@ -867,26 +875,55 @@ function RightPanel() {
             <div className="flex flex-col gap-2 text-xs">
               <Row k="Nombre" v={live.name} />
               <Row k="Material" v={materialLabel(live.material)} />
-              <Row k="Masa" v={`${formatEs(live.mass)} kg`} />
+              <Row k="Masa" v={formatMass(live.mass)} />
               <Row
                 k="Tamaño"
                 v={`${live.size[0].toFixed(1)} × ${live.size[1].toFixed(1)} × ${live.size[2].toFixed(1)}`}
               />
-              <Row k="Resistencia" v={`${formatEs(live.resistance)} %`} />
+              <Row k="Resistencia" v={`${formatEs(Math.round(live.strength))} kPa`} />
               <Row
                 k="Posición"
                 v={`${live.px.toFixed(1)}, ${live.py.toFixed(1)}, ${live.pz.toFixed(1)}`}
               />
-              <Row k="Estado estructural" v={live.estado} />
+              <Row k="Estado" v={live.estado} />
+              <Row k="Soporte" v={live.soporte ? "Apoyada" : "Suelta"} />
               <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
                 <div
-                  className="h-full bg-accent"
-                  style={{ width: `${Math.max(0, (live.health / live.maxHealth) * 100)}%` }}
+                  className={cn(
+                    "h-full transition-[width] duration-200",
+                    live.integridad > 0.6
+                      ? "bg-accent"
+                      : live.integridad > 0.3
+                        ? "bg-warn"
+                        : "bg-danger",
+                  )}
+                  style={{ width: `${Math.max(0, live.integridad * 100)}%` }}
                 />
               </div>
               <p className="font-mono text-[10px] text-subtle">
-                Integridad {formatEs((live.health / live.maxHealth) * 100)} %
+                Integridad {formatEs(Math.round(live.integridad * 100))} % ·{" "}
+                {integrityLabel(live.integridad)}
               </p>
+              {live.soporte && live.capacidad > 1 ? (
+                <>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-3">
+                    <div
+                      className={cn("h-full", live.usoCapacidad > 100 ? "bg-danger" : "bg-subtle")}
+                      style={{ width: `${Math.min(100, live.usoCapacidad)}%` }}
+                    />
+                  </div>
+                  <p className="font-mono text-[10px] text-subtle">
+                    Carga que soporta {formatMass(live.cargaSoportada / 9.81)} ·{" "}
+                    {formatEs(Math.round(live.usoCapacidad))} % de su capacidad
+                    {live.overloaded ? " · sobrecargada" : ""}
+                  </p>
+                </>
+              ) : null}
+              {!live.soporte && live.speed > 0.2 ? (
+                <p className="font-mono text-[10px] text-subtle">
+                  Velocidad {formatEs(Math.round(live.speed * 10) / 10)} m/s
+                </p>
+              ) : null}
               <div className="mt-1 grid grid-cols-2 gap-1.5">
                 <button
                   type="button"

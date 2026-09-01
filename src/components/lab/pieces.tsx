@@ -684,27 +684,60 @@ export function Ground() {
   );
 }
 
+/**
+ * Horizonte lejano.
+ *
+ * Antes eran doce bloques colocados justo al borde de la ciudad, sin colisión
+ * ni simulación: parecían edificios como los demás pero eran indestructibles y
+ * las piezas los atravesaban. Ahora la zona que ocupaban la llenan edificios
+ * reales (ver BUILDINGS) y el horizonte se ha llevado a 140-230 m, donde se lee
+ * sin ambigüedad como fondo: siluetas planas, sin sombras, muy metidas en la
+ * niebla y fuera del alcance de cualquier evento.
+ */
 export function Skyline() {
-  const blocks: { x: number; z: number; w: number; d: number; h: number; c: string }[] = [
-    { x: -48, z: -30, w: 10, d: 9, h: 26, c: "#3a4048" },
-    { x: -50, z: -12, w: 8, d: 8, h: 18, c: "#454b52" },
-    { x: -47, z: 8, w: 11, d: 8, h: 32, c: "#2e343c" },
-    { x: -49, z: 26, w: 9, d: 9, h: 22, c: "#41464d" },
-    { x: 48, z: -28, w: 9, d: 8, h: 24, c: "#323840" },
-    { x: 50, z: -8, w: 12, d: 9, h: 36, c: "#2a3138" },
-    { x: 47, z: 12, w: 8, d: 8, h: 20, c: "#3e444c" },
-    { x: 49, z: 30, w: 10, d: 9, h: 28, c: "#353b42" },
-    { x: -28, z: -48, w: 8, d: 8, h: 16, c: "#3a3f45" },
-    { x: 8, z: -50, w: 10, d: 8, h: 21, c: "#2f353c" },
-    { x: 28, z: 50, w: 9, d: 8, h: 19, c: "#3c4248" },
-    { x: -10, z: 50, w: 11, d: 8, h: 27, c: "#2c3238" },
-  ];
+  const blocks = useMemo(() => {
+    const out: { x: number; z: number; w: number; d: number; h: number; c: string }[] = [];
+    let seed = 20260901;
+    const rnd = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+    const rings = [
+      { r: 145, n: 26 },
+      { r: 190, n: 30 },
+      { r: 235, n: 26 },
+    ];
+    for (const ring of rings) {
+      for (let i = 0; i < ring.n; i++) {
+        const a = (i / ring.n) * Math.PI * 2 + rnd() * 0.09;
+        const r = ring.r + (rnd() - 0.5) * 26;
+        const h = 22 + rnd() * 62 * (ring.r / 145);
+        const w = 10 + rnd() * 16;
+        const shade = 0.14 + rnd() * 0.07;
+        const v = Math.round(shade * 255)
+          .toString(16)
+          .padStart(2, "0");
+        out.push({
+          x: Math.cos(a) * r,
+          z: Math.sin(a) * r,
+          w,
+          d: w * (0.7 + rnd() * 0.6),
+          h,
+          c: `#${v}${v}${Math.round(shade * 275)
+            .toString(16)
+            .padStart(2, "0")}`,
+        });
+      }
+    }
+    return out;
+  }, []);
+
   return (
     <group>
       {blocks.map((b, i) => (
-        <mesh key={i} position={[b.x, b.h / 2, b.z]} castShadow receiveShadow>
+        <mesh key={i} position={[b.x, b.h / 2, b.z]}>
           <boxGeometry args={[b.w, b.h, b.d]} />
-          <meshStandardMaterial color={b.c} roughness={0.86} metalness={0.12} />
+          <meshBasicMaterial color={b.c} fog />
         </mesh>
       ))}
     </group>
@@ -778,7 +811,7 @@ export function ExtraItem({ item }: { item: SpawnItem }) {
         size={[item.w, item.h, item.d]}
         color={item.color}
         material={item.material}
-        mass={item.mass}
+        mass={item.mass || undefined}
         resistance={item.resistance}
       />
     );
@@ -809,7 +842,7 @@ export function ExtraItem({ item }: { item: SpawnItem }) {
       size={[item.w, item.h, item.d]}
       color={item.color}
       material={item.material}
-      mass={item.mass}
+      mass={item.mass || undefined}
       resistance={item.resistance}
     />
   );
