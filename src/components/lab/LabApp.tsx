@@ -816,7 +816,10 @@ function NumField({
       <span className="font-mono text-[10px] text-subtle uppercase">{label}</span>
       <input
         type="number"
-        value={Number.isFinite(value) ? value : 0}
+        step="0.1"
+        // Redondeado: al detonar con el ratón la coordenada llega con toda la
+        // precisión del rayo y el campo mostraba cosas como 21.608520264.
+        value={Number.isFinite(value) ? Math.round(value * 10) / 10 : 0}
         onChange={(e) => onChange(Number(e.target.value))}
         className="min-h-10 rounded-md border border-border bg-bg px-2 font-mono text-sm text-fg outline-none focus:border-accent"
       />

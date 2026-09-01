@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/*
+ * Detección explícita de fuentes. La compilación estática para GitHub Pages
+ * usa `pages/` como raíz de Vite, y sin esta línea Tailwind sólo rastrearía ese
+ * directorio: se quedaba sin generar ninguna utilidad de `src/` y la escena 3D
+ * salía con un lienzo de 150 px de alto. En la aplicación completa es
+ * redundante y no cambia nada.
+ */
+@source "../src";
+
 @theme {
   --color-bg: #070809;
   --color-surface: #101214;
