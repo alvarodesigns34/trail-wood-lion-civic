@@ -1,8 +1,8 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { E as require_react, S as Vector3, T as require_jsx_runtime, a as useThree, b as RepeatWrapping, c as BufferGeometry, g as MeshStandardMaterial, i as useFrame, l as CanvasTexture, n as OrbitControls, p as Fog, r as Canvas, s as BufferAttribute, t as PointerLockControls, u as Color, v as PointsMaterial, x as SRGBColorSpace } from "../_libs/@react-three/drei+[...].mjs";
-import { a as useLab, c as BUILDINGS, d as LAMPS, f as VEHICLES, i as playBoom, l as CRATES, n as held, o as sim, r as setInjectedKeys, s as BARRIERS, u as FLOOR_H } from "./routes-SzspqvEV.mjs";
-import { a as useRapier, i as useBeforePhysicsStep, n as Physics, r as RigidBody, t as CuboidCollider } from "../_libs/@react-three/rapier+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/Scene-C9MZP33_.js
+import { a as useLab, c as BUILDINGS, d as LAMPS, f as VEHICLES, i as playBoom, l as CRATES, m as materialOf, n as held, o as sim, p as densityFor, r as setInjectedKeys, s as BARRIERS, u as FLOOR_H } from "./routes-CJrUI0DA.mjs";
+import { a as useBeforePhysicsStep, i as useAfterPhysicsStep, n as Physics, o as useRapier, r as RigidBody, t as CuboidCollider } from "../_libs/@react-three/rapier+[...].mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/Scene-DYNm2BxG.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var facadeCache = /* @__PURE__ */ new Map();
@@ -121,13 +121,23 @@ function shadeHex(hex, s) {
 	const b = Math.max(0, Math.min(255, Math.round(parseInt(n.slice(4, 6), 16) * s)));
 	return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
-function Piece({ id, name, kind, position, size, color, material, mass, resistance, buildingId, floorIndex, rotation, metalness, roughness, initialDynamic, glass, onImpact, linearVelocity, roofDetail }) {
+function Piece({ id, name, kind, position, size, color, material, mass, hollow, resistance, buildingId, floorIndex, rotation, metalness, roughness, initialDynamic, glass, onImpact, linearVelocity, roofDetail }) {
 	const ref = (0, import_react.useRef)(null);
 	const obj = (0, import_react.useRef)(null);
 	const [dynamic, setDynamic] = (0, import_react.useState)(!!initialDynamic);
 	const [gone, setGone] = (0, import_react.useState)(false);
 	const [w, h, d] = size;
 	const selected = useLab((s) => s.selectedId === id);
+	const density = (0, import_react.useMemo)(() => mass ? mass / Math.max(1e-4, w * h * d) : densityFor(kind, material, hollow), [
+		mass,
+		kind,
+		material,
+		hollow,
+		w,
+		h,
+		d
+	]);
+	const phys = (0, import_react.useMemo)(() => materialOf(material), [material]);
 	(0, import_react.useEffect)(() => {
 		sim.register({
 			id,
@@ -137,13 +147,15 @@ function Piece({ id, name, kind, position, size, color, material, mass, resistan
 			floorIndex,
 			material,
 			mass,
+			hollow,
 			resistance,
 			size: [
 				w,
 				h,
 				d
 			],
-			color
+			color,
+			position
 		});
 		return () => sim.unregister(id);
 	}, [
@@ -154,6 +166,7 @@ function Piece({ id, name, kind, position, size, color, material, mass, resistan
 		floorIndex,
 		material,
 		mass,
+		hollow,
 		resistance,
 		w,
 		h,
@@ -162,6 +175,7 @@ function Piece({ id, name, kind, position, size, color, material, mass, resistan
 	]);
 	(0, import_react.useEffect)(() => {
 		sim.attach(id, ref.current, obj.current, () => setDynamic(true), () => setGone(true));
+		return () => sim.detach(id);
 	}, [id, dynamic]);
 	(0, import_react.useEffect)(() => {
 		if (!dynamic) return;
@@ -181,6 +195,7 @@ function Piece({ id, name, kind, position, size, color, material, mass, resistan
 	]);
 	const onClick = (e) => {
 		e.stopPropagation();
+		if (handleEventClick(e.point)) return;
 		const tool = useLab.getState().tool;
 		if (tool === "select" || tool === "move") {
 			useLab.getState().select(id);
@@ -195,12 +210,9 @@ function Piece({ id, name, kind, position, size, color, material, mass, resistan
 		position,
 		rotation,
 		colliders: false,
-		mass,
-		friction: .92,
-		restitution: .06,
-		linearDamping: .18,
-		angularDamping: .22,
-		ccd: kind === "meteor" || kind === "debris",
+		linearDamping: .04,
+		angularDamping: .28,
+		ccd: kind === "meteor" || kind === "debris" || dynamic && (kind === "floor" || kind === "bridge"),
 		canSleep: true,
 		...linearVelocity ? { linearVelocity } : {},
 		...onImpact ? { onCollisionEnter: onImpact } : {},
@@ -210,8 +222,9 @@ function Piece({ id, name, kind, position, size, color, material, mass, resistan
 				h / 2,
 				d / 2
 			],
-			friction: .92,
-			restitution: .05
+			density,
+			friction: phys.friction,
+			restitution: phys.restitution
 		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("group", {
 			ref: obj,
 			children: kind === "floor" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FloorVisual, {
@@ -320,7 +333,7 @@ function FloorVisual({ w, h, d, color, glass, selected, onClick, roofDetail }) {
 	}) : null] });
 }
 function BuildingStack({ id, name, x, z, floors, w, d, color, material, resistance, glass }) {
-	const h = FLOOR_H * .92;
+	const h = FLOOR_H * .97;
 	const pieces = [];
 	for (let i = 0; i < floors; i++) {
 		const y = i * FLOOR_H + h / 2;
@@ -343,7 +356,6 @@ function BuildingStack({ id, name, x, z, floors, w, d, color, material, resistan
 			],
 			color: shadeHex(color, shade),
 			material,
-			mass: 180 + w * d * 2.4,
 			resistance,
 			glass,
 			roofDetail: i === floors - 1
@@ -356,17 +368,17 @@ function VehicleBody({ id, kind, x, z, rotY, color }) {
 		w: 2.5,
 		h: 2.5,
 		d: 7.2,
-		mass: 260
+		mass: 8600
 	} : kind === "van" ? {
 		w: 2.1,
 		h: 2.1,
 		d: 5.1,
-		mass: 140
+		mass: 2600
 	} : {
 		w: 1.9,
 		h: 1.35,
 		d: 4.2,
-		mass: 90
+		mass: 1400
 	};
 	const name = kind === "truck" ? "Camión" : kind === "van" ? "Furgoneta" : "Coche";
 	const ref = (0, import_react.useRef)(null);
@@ -387,7 +399,12 @@ function VehicleBody({ id, kind, x, z, rotY, color }) {
 				dim.h,
 				dim.d
 			],
-			color
+			color,
+			position: [
+				x,
+				dim.h / 2 + .02,
+				z
+			]
 		});
 		return () => sim.unregister(id);
 	}, [
@@ -397,10 +414,13 @@ function VehicleBody({ id, kind, x, z, rotY, color }) {
 		dim.w,
 		dim.h,
 		dim.d,
-		color
+		color,
+		x,
+		z
 	]);
 	(0, import_react.useEffect)(() => {
 		sim.attach(id, ref.current, obj.current, () => setDynamic(true), () => setGone(true));
+		return () => sim.detach(id);
 	}, [id, dynamic]);
 	(0, import_react.useEffect)(() => {
 		if (!dynamic) return;
@@ -409,6 +429,7 @@ function VehicleBody({ id, kind, x, z, rotY, color }) {
 	}, [dynamic, id]);
 	const onClick = (e) => {
 		e.stopPropagation();
+		if (handleEventClick(e.point)) return;
 		const tool = useLab.getState().tool;
 		if (tool === "select" || tool === "move") useLab.getState().select(id);
 	};
@@ -431,11 +452,8 @@ function VehicleBody({ id, kind, x, z, rotY, color }) {
 			0
 		],
 		colliders: false,
-		mass: dim.mass,
-		friction: .92,
-		restitution: .06,
-		linearDamping: .18,
-		angularDamping: .22,
+		linearDamping: .05,
+		angularDamping: .3,
 		canSleep: true,
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CuboidCollider, {
 			args: [
@@ -443,8 +461,9 @@ function VehicleBody({ id, kind, x, z, rotY, color }) {
 				dim.h / 2,
 				dim.d / 2
 			],
-			friction: .92,
-			restitution: .05
+			density: dim.mass / (dim.w * dim.h * dim.d),
+			friction: .72,
+			restitution: .1
 		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
 			ref: obj,
 			onClick,
@@ -540,19 +559,29 @@ function LampPost({ id, x, z }) {
 			kind: "prop",
 			name: "Farola",
 			material: "acero",
-			mass: 26,
+			hollow: .18,
 			resistance: 20,
 			size: [
 				.28,
 				5.5,
 				.28
 			],
-			color: "#3a3e44"
+			color: "#3a3e44",
+			position: [
+				x,
+				2.75,
+				z
+			]
 		});
 		return () => sim.unregister(id);
-	}, [id]);
+	}, [
+		id,
+		x,
+		z
+	]);
 	(0, import_react.useEffect)(() => {
 		sim.attach(id, ref.current, obj.current, () => setDynamic(true), () => setGone(true));
+		return () => sim.detach(id);
 	}, [id, dynamic]);
 	(0, import_react.useEffect)(() => {
 		if (!dynamic) return;
@@ -561,6 +590,7 @@ function LampPost({ id, x, z }) {
 	}, [dynamic, id]);
 	const onClick = (e) => {
 		e.stopPropagation();
+		if (handleEventClick(e.point)) return;
 		const tool = useLab.getState().tool;
 		if (tool === "select" || tool === "move") useLab.getState().select(id);
 	};
@@ -575,15 +605,19 @@ function LampPost({ id, x, z }) {
 			z
 		],
 		colliders: false,
-		mass: 26,
-		friction: .9,
-		restitution: .05,
+		linearDamping: .04,
+		angularDamping: .25,
 		canSleep: true,
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CuboidCollider, { args: [
-			.14,
-			2.75,
-			.14
-		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CuboidCollider, {
+			args: [
+				.14,
+				2.75,
+				.14
+			],
+			density: densityFor("prop", "acero", .18),
+			friction: .55,
+			restitution: .16
+		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
 			ref: obj,
 			onClick,
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
@@ -636,7 +670,7 @@ function CrateStack({ id, x, z, count }) {
 		],
 		color: i % 2 ? "#8a6a3c" : "#6e5530",
 		material: "madera",
-		mass: 28,
+		hollow: .32,
 		resistance: 22
 	}, `${id}-${i}`)) });
 }
@@ -664,7 +698,6 @@ function Bridge() {
 			],
 			color: "#7c7a74",
 			material: "hormigón",
-			mass: 280,
 			resistance: 72
 		}, `bridge-${i}`));
 	}
@@ -696,7 +729,6 @@ function Bridge() {
 			],
 			color: "#5c5a54",
 			material: "hormigón",
-			mass: 400,
 			resistance: 88
 		}, `pillar-${i}`)),
 		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
@@ -719,6 +751,40 @@ function Bridge() {
 			})]
 		})
 	] });
+}
+/**
+* Clic sobre una pieza con una herramienta de evento activa. Antes sólo el
+* suelo detonaba: si se apuntaba a un edificio no pasaba nada, que es
+* justamente lo contrario de lo que se espera al querer atacar una planta
+* concreta. Devuelve true si ha consumido el clic.
+*/
+function handleEventClick(p) {
+	const { tool } = useLab.getState();
+	if (tool === "explode") {
+		useLab.getState().setMarker({
+			x: p.x,
+			y: p.y,
+			z: p.z
+		});
+		window.__lab?.detonate(p.x, p.z, p.y);
+		return true;
+	}
+	if (tool === "meteor") {
+		const power = useLab.getState().explosion.power;
+		sim.spawnMeteor(p.x, p.z, power);
+		useLab.getState().record({
+			t: sim.simTime,
+			type: "meteor",
+			payload: {
+				x: p.x,
+				z: p.z,
+				power
+			}
+		});
+		useLab.getState().setMessage("Meteorito en trayectoria.");
+		return true;
+	}
+	return false;
 }
 function handleGround(p) {
 	const { tool, explosion, catalogId, selectedId } = useLab.getState();
@@ -889,120 +955,68 @@ function Ground() {
 		})
 	] });
 }
+/**
+* Horizonte lejano.
+*
+* Antes eran doce bloques colocados justo al borde de la ciudad, sin colisión
+* ni simulación: parecían edificios como los demás pero eran indestructibles y
+* las piezas los atravesaban. Ahora la zona que ocupaban la llenan edificios
+* reales (ver BUILDINGS) y el horizonte se ha llevado a 140-230 m, donde se lee
+* sin ambigüedad como fondo: siluetas planas, sin sombras, muy metidas en la
+* niebla y fuera del alcance de cualquier evento.
+*/
 function Skyline() {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("group", { children: [
-		{
-			x: -48,
-			z: -30,
-			w: 10,
-			d: 9,
-			h: 26,
-			c: "#3a4048"
-		},
-		{
-			x: -50,
-			z: -12,
-			w: 8,
-			d: 8,
-			h: 18,
-			c: "#454b52"
-		},
-		{
-			x: -47,
-			z: 8,
-			w: 11,
-			d: 8,
-			h: 32,
-			c: "#2e343c"
-		},
-		{
-			x: -49,
-			z: 26,
-			w: 9,
-			d: 9,
-			h: 22,
-			c: "#41464d"
-		},
-		{
-			x: 48,
-			z: -28,
-			w: 9,
-			d: 8,
-			h: 24,
-			c: "#323840"
-		},
-		{
-			x: 50,
-			z: -8,
-			w: 12,
-			d: 9,
-			h: 36,
-			c: "#2a3138"
-		},
-		{
-			x: 47,
-			z: 12,
-			w: 8,
-			d: 8,
-			h: 20,
-			c: "#3e444c"
-		},
-		{
-			x: 49,
-			z: 30,
-			w: 10,
-			d: 9,
-			h: 28,
-			c: "#353b42"
-		},
-		{
-			x: -28,
-			z: -48,
-			w: 8,
-			d: 8,
-			h: 16,
-			c: "#3a3f45"
-		},
-		{
-			x: 8,
-			z: -50,
-			w: 10,
-			d: 8,
-			h: 21,
-			c: "#2f353c"
-		},
-		{
-			x: 28,
-			z: 50,
-			w: 9,
-			d: 8,
-			h: 19,
-			c: "#3c4248"
-		},
-		{
-			x: -10,
-			z: 50,
-			w: 11,
-			d: 8,
-			h: 27,
-			c: "#2c3238"
+	const blocks = (0, import_react.useMemo)(() => {
+		const out = [];
+		let seed = 20260901;
+		const rnd = () => {
+			seed = (seed * 1664525 + 1013904223) % 4294967296;
+			return seed / 4294967296;
+		};
+		for (const ring of [
+			{
+				r: 145,
+				n: 26
+			},
+			{
+				r: 190,
+				n: 30
+			},
+			{
+				r: 235,
+				n: 26
+			}
+		]) for (let i = 0; i < ring.n; i++) {
+			const a = i / ring.n * Math.PI * 2 + rnd() * .09;
+			const r = ring.r + (rnd() - .5) * 26;
+			const h = 22 + rnd() * 62 * (ring.r / 145);
+			const w = 10 + rnd() * 16;
+			const shade = .14 + rnd() * .07;
+			const v = Math.round(shade * 255).toString(16).padStart(2, "0");
+			out.push({
+				x: Math.cos(a) * r,
+				z: Math.sin(a) * r,
+				w,
+				d: w * (.7 + rnd() * .6),
+				h,
+				c: `#${v}${v}${Math.round(shade * 275).toString(16).padStart(2, "0")}`
+			});
 		}
-	].map((b, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+		return out;
+	}, []);
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("group", { children: blocks.map((b, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 		position: [
 			b.x,
 			b.h / 2,
 			b.z
 		],
-		castShadow: true,
-		receiveShadow: true,
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
 			b.w,
 			b.h,
 			b.d
-		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", {
+		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshBasicMaterial", {
 			color: b.c,
-			roughness: .86,
-			metalness: .12
+			fog: true
 		})]
 	}, i)) });
 }
@@ -1051,7 +1065,7 @@ function ExtraItem({ item }) {
 		],
 		color: item.color,
 		material: "acero",
-		mass: 40,
+		hollow: .12,
 		resistance: 38
 	}, `${item.id}-${i}`)) });
 	if (item.kind === "ramp") return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Piece, {
@@ -1075,7 +1089,7 @@ function ExtraItem({ item }) {
 		],
 		color: item.color,
 		material: item.material,
-		mass: item.mass,
+		mass: item.mass || void 0,
 		resistance: item.resistance
 	});
 	if (item.kind === "tank") return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Piece, {
@@ -1115,7 +1129,7 @@ function ExtraItem({ item }) {
 		],
 		color: item.color,
 		material: item.material,
-		mass: item.mass,
+		mass: item.mass || void 0,
 		resistance: item.resistance
 	});
 }
@@ -1136,12 +1150,11 @@ function DebrisPiece({ item }) {
 		],
 		color: item.color,
 		material: item.material,
-		mass: Math.max(8, item.mass),
-		resistance: 10,
+		resistance: 14,
 		initialDynamic: true,
 		linearVelocity: [
 			item.vx ?? 0,
-			item.vy ?? 2,
+			item.vy ?? 0,
 			item.vz ?? 0
 		]
 	});
@@ -1156,15 +1169,12 @@ function MeteorBody({ id, x, z, power }) {
 			z
 		],
 		colliders: false,
-		mass: 1800,
 		ccd: true,
 		linearVelocity: [
 			0,
-			-38,
+			-34,
 			0
 		],
-		friction: .4,
-		restitution: .05,
 		onCollisionEnter: (payload) => {
 			if (hit.current) return;
 			hit.current = true;
@@ -1178,11 +1188,16 @@ function MeteorBody({ id, x, z, power }) {
 			useLab.getState().removeMeteor(id);
 		},
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CuboidCollider, { args: [
-				1.4,
-				1.4,
-				1.4
-			] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CuboidCollider, {
+				args: [
+					1.4,
+					1.4,
+					1.4
+				],
+				density: 2700,
+				friction: .8,
+				restitution: .05
+			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 				castShadow: true,
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("icosahedronGeometry", { args: [1.6, 0] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", {
@@ -1462,12 +1477,12 @@ function DustViz({ fx }) {
 	const count = 140;
 	const geo = (0, import_react.useMemo)(() => makeDustGeo(count), []);
 	const mat = (0, import_react.useMemo)(() => new PointsMaterial({
-		color: "#c4b49a",
+		color: fx.color ?? "#c4b49a",
 		size: .48,
 		transparent: true,
 		opacity: .78,
 		depthWrite: false
-	}), []);
+	}), [fx.color]);
 	const emberGeo = (0, import_react.useMemo)(() => makeDustGeo(40), []);
 	const emberMat = (0, import_react.useMemo)(() => new PointsMaterial({
 		color: "#ff7a32",
@@ -1522,7 +1537,6 @@ function FxLayer() {
 	const tick = (0, import_react.useRef)(0);
 	const [, setN] = (0, import_react.useState)(0);
 	useFrame((_, dt) => {
-		sim.tickFx(dt);
 		tick.current += dt;
 		if (tick.current > 1 / 30) {
 			tick.current = 0;
@@ -1613,17 +1627,24 @@ function Sun() {
 		color: "#ffd8b0"
 	});
 }
+/** Paso fijo de Rapier. Todo el tiempo de simulación se mide con él. */
+var FIXED_DT = 1 / 60;
 function TimeStepper() {
 	const { step } = useRapier();
 	const fpsAcc = (0, import_react.useRef)(0);
 	const fpsFrames = (0, import_react.useRef)(0);
 	useBeforePhysicsStep(() => {
-		sim.applyWindAndRumble();
+		sim.stepSim(FIXED_DT);
 	});
+	useAfterPhysicsStep(() => {
+		sim.postStep(FIXED_DT);
+	});
+	(0, import_react.useEffect)(() => {
+		useLab.getState().setSceneReady(true);
+	}, []);
 	useFrame((_, dt) => {
 		const st = useLab.getState();
-		const d = Math.min(dt, .1);
-		fpsAcc.current += d;
+		fpsAcc.current += Math.min(dt, .1);
 		fpsFrames.current += 1;
 		if (fpsAcc.current >= .4) {
 			useLab.getState().setFps(Math.round(fpsFrames.current / fpsAcc.current));
@@ -1631,7 +1652,7 @@ function TimeStepper() {
 			fpsAcc.current = 0;
 			fpsFrames.current = 0;
 		}
-		if (!st.paused && st.timeScale !== 1) step(Math.min(d * st.timeScale, .2));
+		if (!st.paused && st.timeScale !== 1) step(Math.min(Math.min(dt, .25) * st.timeScale, .35));
 		if (sim.debrisQueue.length) {
 			const req = sim.debrisQueue.splice(0, 12);
 			useLab.getState().pushDebris(req.map((r) => ({
@@ -1645,14 +1666,18 @@ function TimeStepper() {
 				w: r.w,
 				h: r.h,
 				d: r.d,
-				mass: 12,
+				mass: 0,
 				material: r.material,
-				resistance: 8,
+				resistance: 14,
 				color: r.color,
 				vx: r.vx,
 				vy: r.vy,
 				vz: r.vz
 			})));
+		}
+		if (sim.retireQueue.length) {
+			const ids = sim.retireQueue.splice(0, 24);
+			useLab.getState().retireDebris(ids);
 		}
 		if (sim.meteorQueue.length) {
 			const m = sim.meteorQueue.shift();
@@ -1742,7 +1767,6 @@ function World() {
 			],
 			color: "#c9b48a",
 			material: "hormigón",
-			mass: 46,
 			resistance: 40
 		}, `bar-${i}`)),
 		extras.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExtraItem, { item: e }, e.id)),
@@ -1758,7 +1782,7 @@ function SceneTint() {
 	const { scene, gl } = useThree();
 	(0, import_react.useEffect)(() => {
 		scene.background = new Color("#10141a");
-		scene.fog = new Fog("#10141a", 55, 160);
+		scene.fog = new Fog("#10141a", 70, 300);
 		gl.toneMapping = 4;
 		gl.toneMappingExposure = 1.12;
 		gl.shadowMap.enabled = true;
@@ -1785,7 +1809,7 @@ function Scene() {
 			],
 			fov: 48,
 			near: .1,
-			far: 260
+			far: 520
 		},
 		gl: {
 			antialias: true,
@@ -1801,12 +1825,14 @@ function Scene() {
 				fallback: null,
 				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Physics, {
 					paused: paused || timeScale !== 1,
-					timeStep: 1 / 60,
+					timeStep: FIXED_DT,
 					gravity: [
 						0,
 						-9.81,
 						0
 					],
+					numSolverIterations: quality === "alta" ? 12 : 6,
+					contactNaturalFrequency: 20,
 					interpolate: true,
 					colliders: false,
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TimeStepper, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(World, {})]

@@ -540,6 +540,20 @@ var useBeforePhysicsStep = (callback) => {
 	}, []);
 };
 /**
+* Registers a callback to be called after the physics step
+* @category Hooks
+*/
+var useAfterPhysicsStep = (callback) => {
+	const { afterStepCallbacks } = useRapier();
+	const ref = useMutableCallback(callback);
+	(0, import_react.useEffect)(() => {
+		afterStepCallbacks.add(ref);
+		return () => {
+			afterStepCallbacks.delete(ref);
+		};
+	}, []);
+};
+/**
 * @internal
 */
 var useChildColliderProps = (ref, options, ignoreMeshColliders = true) => {
@@ -1381,4 +1395,4 @@ var InstancedRigidBodies = /*#__PURE__*/ (0, import_react.memo)((_ref) => {
 });
 InstancedRigidBodies.displayName = "InstancedRigidBodies";
 //#endregion
-export { useRapier as a, useBeforePhysicsStep as i, Physics as n, RigidBody as r, CuboidCollider as t };
+export { useBeforePhysicsStep as a, useAfterPhysicsStep as i, Physics as n, useRapier as o, RigidBody as r, CuboidCollider as t };

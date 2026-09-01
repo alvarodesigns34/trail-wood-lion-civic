@@ -78,7 +78,13 @@ impulso_esp. = (800·W/r²) · conf                    [Pa·s]
 
 Dos magnitudes con dos papeles distintos, y esta separación es deliberada:
 
-- **La sobrepresión hace daño.** `daño = ((p − resistencia) / (3,2·resistencia))^0,8`
+- **La sobrepresión hace daño.** `daño = ((p − resistencia) / (3,2·resistencia))^0,8`,
+  multiplicado por la **cobertura**: la fracción de la pieza que queda dentro
+  del radio donde la sobrepresión supera tres veces su resistencia
+  (`destructiveRadius`). Sin esa acotación cualquier carga en contacto arruinaba
+  la pieza entera por grande que fuera, y medio kilo bien colocado bastaba para
+  tirar un edificio. Ahora una carga pequeña abre un boquete y una grande se
+  lleva la planta.
 - **El impulso específico mueve.** `J = impulso_esp. × área_proyectada`,
   aplicado con `applyImpulseAtPoint` en el punto más cercano de la caja.
 
@@ -238,3 +244,12 @@ es todo lo demás, porque la física es independiente del renderizador.
   fachada + núcleo permitiría boquetes localizados en vez de perder la planta
   entera.
 - El terremoto no mueve el suelo visualmente; sólo aplica sus efectos.
+
+## 10. Cómo se detona
+
+- Con la herramienta **Explotar** activa, un clic en el suelo detona a la altura
+  del foco indicada en el panel; un clic **sobre cualquier pieza** detona en ese
+  punto exacto en 3D, que es lo que permite atacar una planta concreta.
+- La herramienta **Meteorito** funciona igual: el clic marca el punto de caída.
+- El panel de explosión permite además detonar en unas coordenadas concretas
+  sin usar el ratón.

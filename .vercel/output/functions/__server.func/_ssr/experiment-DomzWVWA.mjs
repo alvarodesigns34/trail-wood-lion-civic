@@ -1,6 +1,6 @@
 import { n as TSS_SERVER_FUNCTION, t as createServerFn } from "./ssr.mjs";
-import { t as parseCommand } from "./parse-command-BDktVIdo.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/experiment-wNeYCF_e.js
+import { t as parseCommand } from "./parse-command-CuRKwh1c.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/experiment-DomzWVWA.js
 var createServerRpc = (serverFnMeta, splitImportFn) => {
 	const url = "/_serverFn/" + serverFnMeta.id;
 	return Object.assign(splitImportFn, {
@@ -13,12 +13,12 @@ var SYSTEM = `Eres el operador de DESTRUCT LAB, un simulador de destrucción est
 El usuario escribe en español. Responde SOLO un JSON válido, sin markdown, con esta forma:
 {"message":"frase breve en español confirmando lo que vas a hacer","actions":[...]}
 Acciones permitidas (omite campos innecesarios):
-- {"type":"explosion","power":10-160,"radius":6-36,"height":0-20,"x":-40-40,"z":-40-40}
+- {"type":"explosion","power":0.25-500,"radius":3-90,"height":0-30,"x":-40-40,"z":-40-40}  // power = kg equivalentes de TNT: 0,5 muy debil / 3 debil / 20 media / 120 fuerte / 500 extrema. Si omites radius se calcula solo.
 - {"type":"earthquake","intensity":0-1}
-- {"type":"meteor","x":-40-40,"z":-40-40,"power":30-140}
+- {"type":"meteor","x":-40-40,"z":-40-40,"power":5-300}
 - {"type":"wind","strength":0-1}
 - {"type":"collapse","target":"east-center"|"east-blue"|"bridge"|"west-b"|"all"}
-- {"type":"shockwave","power":20-120,"x":number,"z":number}
+- {"type":"shockwave","power":1-300,"x":number,"z":number}
 - {"type":"spawn","catalog":"torre"|"edificio-medio"|"edificio-bajo"|"puente-mod"|"coche"|"camion"|"contenedor"|"columna"|"muro","x":number,"z":number}
 - {"type":"timescale","value":0.25|0.5|1|2|5|10}
 - {"type":"reset"}

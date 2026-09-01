@@ -1,12 +1,12 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { E as require_react, T as require_jsx_runtime } from "../_libs/@react-three/drei+[...].mjs";
 import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } from "./ssr.mjs";
-import { t as parseCommand } from "./parse-command-BDktVIdo.mjs";
+import { t as parseCommand } from "./parse-command-CuRKwh1c.mjs";
 import { t as create } from "../_libs/zustand.mjs";
 import { t as clsx } from "../_libs/clsx.mjs";
 import { t as twMerge } from "../_libs/tailwind-merge.mjs";
 import { C as Car, D as Box, E as BrickWall, S as ChevronLeft, T as Building2, _ as Crosshair, a as Trash2, b as CircleHelp, c as RotateCcw, d as Pause, f as Orbit, g as Eye, h as Focus, l as Play, m as Menu, n as X, o as Spline, p as Mountain, r as Wind, s as Sparkles, t as Zap, u as PersonStanding, v as Copy, w as Camera, x as ChevronRight, y as Clapperboard } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-SzspqvEV.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-CJrUI0DA.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -19,6 +19,196 @@ var __exportAll = (all, no_symbols) => {
 	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
 	return target;
 };
+var MATERIALS = {
+	hormigon: {
+		id: "hormigon",
+		label: "Hormigón",
+		density: 2300,
+		strength: 95,
+		toughness: 200,
+		restitution: .02,
+		friction: .86,
+		brittle: .62,
+		dust: "#b9b2a4"
+	},
+	"hormigon-armado": {
+		id: "hormigon-armado",
+		label: "Hormigón armado",
+		density: 2500,
+		strength: 175,
+		toughness: 350,
+		restitution: .02,
+		friction: .88,
+		brittle: .42,
+		dust: "#b3aca0"
+	},
+	ladrillo: {
+		id: "ladrillo",
+		label: "Ladrillo",
+		density: 1800,
+		strength: 32,
+		toughness: 60,
+		restitution: .03,
+		friction: .9,
+		brittle: .82,
+		dust: "#c09a80"
+	},
+	acero: {
+		id: "acero",
+		label: "Acero",
+		density: 2200,
+		strength: 260,
+		toughness: 600,
+		restitution: .1,
+		friction: .52,
+		brittle: .08,
+		dust: "#98a0a8"
+	},
+	metal: {
+		id: "metal",
+		label: "Metal",
+		density: 340,
+		strength: 40,
+		toughness: 170,
+		restitution: .08,
+		friction: .58,
+		brittle: .1,
+		dust: "#9aa2aa"
+	},
+	madera: {
+		id: "madera",
+		label: "Madera",
+		density: 450,
+		strength: 26,
+		toughness: 66,
+		restitution: .15,
+		friction: .7,
+		brittle: .45,
+		dust: "#a8814e"
+	},
+	vidrio: {
+		id: "vidrio",
+		label: "Vidrio",
+		density: 2500,
+		strength: 6,
+		toughness: 3,
+		restitution: .02,
+		friction: .36,
+		brittle: .97,
+		dust: "#bcd2da"
+	},
+	roca: {
+		id: "roca",
+		label: "Roca",
+		density: 2700,
+		strength: 210,
+		toughness: 150,
+		restitution: .05,
+		friction: .9,
+		brittle: .55,
+		dust: "#8d8378"
+	},
+	asfalto: {
+		id: "asfalto",
+		label: "Asfalto",
+		density: 2300,
+		strength: 150,
+		toughness: 180,
+		restitution: .02,
+		friction: .95,
+		brittle: .4,
+		dust: "#5a5a5c"
+	}
+};
+var ALIASES = {
+	hormigón: "hormigon",
+	"hormigón armado": "hormigon-armado",
+	hormigonarmado: "hormigon-armado",
+	concreto: "hormigon",
+	cristal: "vidrio",
+	piedra: "roca",
+	acero_estructural: "acero"
+};
+function normalise(name) {
+	return name.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+function materialOf(name) {
+	if (!name) return MATERIALS.hormigon;
+	const raw = name.trim().toLowerCase();
+	const direct = MATERIALS[raw] ?? MATERIALS[ALIASES[raw] ?? ""];
+	if (direct) return direct;
+	const key = normalise(name);
+	return MATERIALS[key] ?? MATERIALS[ALIASES[key] ?? ""] ?? MATERIALS.hormigon;
+}
+/**
+* Fracción de la caja envolvente realmente ocupada por materia.
+* Una planta de edificio es casi toda aire (forjado + pilares + tabiques);
+* un bloque de hormigón es macizo.
+*/
+var OCCUPANCY = {
+	floor: .13,
+	column: .8,
+	bridge: .85,
+	prop: .7,
+	vehicle: 1,
+	debris: .8,
+	meteor: 1,
+	terrain: 1,
+	core: .45
+};
+function occupancyFor(kind) {
+	return OCCUPANCY[kind] ?? .7;
+}
+/** Densidad efectiva final (kg/m³) que se pasa al collider de Rapier. */
+function densityFor(kind, material, hollow) {
+	return materialOf(material).density * occupancyFor(kind) * (hollow ?? 1);
+}
+function massFor(kind, material, size, hollow) {
+	const volume = Math.max(1e-4, size[0] * size[1] * size[2]);
+	return densityFor(kind, material, hollow) * volume;
+}
+/**
+* Resistencia efectiva a la sobrepresión (kPa).
+*
+* El valor del material es el de la materia maciza; una planta entera es un
+* montaje con fachada, tabiques y huecos, y cede mucho antes que un bloque del
+* mismo material. La calidad constructiva (`resistance`, 0-100) modula el
+* resultado: 50 es la referencia neutra.
+*
+* Con esta corrección las cifras caen donde deben según las tablas reales de
+* daño por onda expansiva: una estructura de acero acusa daños graves en torno
+* a 110 kPa y un edificio de hormigón corriente sobre 45 kPa.
+*/
+function strengthOf(material, resistance, kind) {
+	const assembly = kind ? Math.pow(occupancyFor(kind), .45) : 1;
+	return materialOf(material).strength * (.45 + Math.max(0, resistance) / 90) * assembly;
+}
+/**
+* Tenacidad efectiva al impacto (J/kg).
+*
+* El valor del material corresponde a la materia maciza. Una planta de edificio
+* es un montaje hueco: aguanta mucho menos por kilo que un bloque del mismo
+* material, y por eso un forjado que cae una planta queda destrozado mientras
+* que una barrera de hormigón que cae tres metros sólo se agrieta.
+*
+* Referencias usadas para calibrar:
+*  - barrera de hormigón cayendo 3 m  → ~20 % de daño
+*  - coche cayendo 5 m                → ~35 %
+*  - forjado cayendo una planta       → ~55 %
+*  - caja de madera cayendo 4 m       → se rompe
+*/
+function toughnessOf(material, resistance, kind) {
+	const assembly = kind ? occupancyFor(kind) : 1;
+	return materialOf(material).toughness * (.5 + Math.max(0, resistance) / 100) * assembly;
+}
+/** Etiqueta en español del estado de integridad de una pieza. */
+function integrityLabel(integrity) {
+	if (integrity >= .92) return "Intacta";
+	if (integrity >= .7) return "Fisurada";
+	if (integrity >= .45) return "Dañada";
+	if (integrity >= .2) return "Comprometida";
+	return "Crítica";
+}
 var FLOOR_H = 2.75;
 var BUILDINGS = [
 	{
@@ -83,6 +273,54 @@ var BUILDINGS = [
 		color: "#8b8074",
 		material: "hormigón",
 		resistance: 60
+	},
+	{
+		id: "west-far-n",
+		name: "Nave oeste norte",
+		x: -40,
+		z: -28,
+		floors: 3,
+		w: 9,
+		d: 7.4,
+		color: "#6f6a62",
+		material: "ladrillo",
+		resistance: 42
+	},
+	{
+		id: "west-far-s",
+		name: "Bloque oeste lejano",
+		x: -40,
+		z: 22,
+		floors: 5,
+		w: 7.6,
+		d: 7,
+		color: "#7f7869",
+		material: "hormigón",
+		resistance: 56
+	},
+	{
+		id: "east-far-n",
+		name: "Almacén este",
+		x: 40,
+		z: -30,
+		floors: 2,
+		w: 10,
+		d: 8,
+		color: "#5f6a70",
+		material: "acero",
+		resistance: 50
+	},
+	{
+		id: "east-far-s",
+		name: "Torre este lejana",
+		x: 40,
+		z: 26,
+		floors: 6,
+		w: 7,
+		d: 7,
+		color: "#4a5560",
+		material: "hormigón",
+		resistance: 58
 	}
 ];
 var VEHICLES = [
@@ -204,7 +442,6 @@ var CATALOG = [
 		w: 1.1,
 		h: 4,
 		d: 1.1,
-		mass: 220,
 		material: "hormigón",
 		resistance: 78,
 		color: "#8a8378"
@@ -217,7 +454,6 @@ var CATALOG = [
 		w: 6,
 		h: 3.2,
 		d: .55,
-		mass: 280,
 		material: "hormigón",
 		resistance: 58,
 		color: "#7d776e"
@@ -230,7 +466,6 @@ var CATALOG = [
 		w: 6,
 		h: .5,
 		d: 6,
-		mass: 320,
 		material: "hormigón",
 		resistance: 64,
 		color: "#8f897e"
@@ -243,7 +478,6 @@ var CATALOG = [
 		w: 8,
 		h: .45,
 		d: .45,
-		mass: 160,
 		material: "acero",
 		resistance: 82,
 		color: "#6a7078"
@@ -256,7 +490,6 @@ var CATALOG = [
 		w: 2,
 		h: 2,
 		d: 2,
-		mass: 180,
 		material: "hormigón",
 		resistance: 66,
 		color: "#857f74"
@@ -305,7 +538,6 @@ var CATALOG = [
 		w: 4,
 		h: .65,
 		d: 5.4,
-		mass: 360,
 		material: "hormigón",
 		resistance: 74,
 		color: "#7c7a74"
@@ -318,7 +550,6 @@ var CATALOG = [
 		w: 1.2,
 		h: 16,
 		d: 1.2,
-		mass: 90,
 		material: "acero",
 		resistance: 40,
 		color: "#9aa3ad"
@@ -331,7 +562,6 @@ var CATALOG = [
 		w: 2,
 		h: 1.4,
 		d: 4.2,
-		mass: 90,
 		material: "metal",
 		resistance: 35,
 		color: "#c45c4a"
@@ -344,7 +574,6 @@ var CATALOG = [
 		w: 2.2,
 		h: 2.2,
 		d: 5.2,
-		mass: 140,
 		material: "metal",
 		resistance: 40,
 		color: "#4a5a4e"
@@ -357,7 +586,6 @@ var CATALOG = [
 		w: 2.6,
 		h: 2.6,
 		d: 7.4,
-		mass: 280,
 		material: "metal",
 		resistance: 48,
 		color: "#c9a227"
@@ -370,7 +598,6 @@ var CATALOG = [
 		w: 6,
 		h: 2.6,
 		d: 2.5,
-		mass: 420,
 		material: "acero",
 		resistance: 76,
 		color: "#3a6e8a"
@@ -383,7 +610,6 @@ var CATALOG = [
 		w: 2.1,
 		h: .9,
 		d: .42,
-		mass: 48,
 		material: "hormigón",
 		resistance: 42,
 		color: "#c9b48a"
@@ -396,7 +622,6 @@ var CATALOG = [
 		w: .28,
 		h: 5.5,
 		d: .28,
-		mass: 28,
 		material: "acero",
 		resistance: 22,
 		color: "#3a3e44"
@@ -409,7 +634,6 @@ var CATALOG = [
 		w: 1.2,
 		h: 1.2,
 		d: 1.2,
-		mass: 32,
 		material: "madera",
 		resistance: 22,
 		color: "#8a6a3c"
@@ -422,7 +646,6 @@ var CATALOG = [
 		w: 2.2,
 		h: 2.2,
 		d: 4.4,
-		mass: 260,
 		material: "acero",
 		resistance: 60,
 		color: "#6a7470"
@@ -435,7 +658,6 @@ var CATALOG = [
 		w: 6,
 		h: 2.4,
 		d: 8,
-		mass: 500,
 		material: "hormigón",
 		resistance: 90,
 		color: "#6e6a64"
@@ -448,7 +670,6 @@ var CATALOG = [
 		w: 8,
 		h: .6,
 		d: 8,
-		mass: 640,
 		material: "hormigón",
 		resistance: 92,
 		color: "#7a766e"
@@ -461,7 +682,6 @@ var CATALOG = [
 		w: 8,
 		h: 3.2,
 		d: 1.1,
-		mass: 700,
 		material: "hormigón",
 		resistance: 88,
 		color: "#6c6860"
@@ -491,26 +711,504 @@ var CHALLENGES = [
 	{
 		id: "puente",
 		title: "Cirugía de puente",
-		brief: "Haz caer el puente utilizando la menor fuerza posible (potencia ≤ 40)."
+		brief: "Haz caer el puente con la carga más pequeña posible (≤ 10 kg de TNT)."
 	}
 ];
+/**
+* Masa real (kg) de una pieza del catálogo, deducida de su geometría y su
+* material igual que en el resto del mundo. Así lo que dice la interfaz y lo
+* que siente la simulación son la misma cosa.
+*/
+function catalogMass(item) {
+	if (item.kind === "building") {
+		const h = FLOOR_H * .97;
+		return massFor("floor", item.material, [
+			item.w ?? 6,
+			h,
+			item.d ?? 6
+		]) * (item.floors ?? 4);
+	}
+	if (item.kind === "car") return 1400;
+	if (item.kind === "van") return 2600;
+	if (item.kind === "truck") return 8600;
+	if (item.kind === "lamp") return massFor("prop", "acero", [
+		.28,
+		5.5,
+		.28
+	], .18);
+	if (item.kind === "antenna") return massFor("column", "acero", [
+		.7,
+		2.6,
+		.7
+	], .12) * 6;
+	return massFor(item.kind === "bridge-seg" ? "bridge" : item.kind === "ramp" ? "terrain" : "prop", item.material, [
+		item.w ?? 2,
+		item.h ?? 2,
+		item.d ?? 2
+	]);
+}
 function catalogById(id) {
 	return CATALOG.find((c) => c.id === id);
 }
 function materialLabel(mat) {
 	return mat.charAt(0).toUpperCase() + mat.slice(1);
 }
+var IMPULSE_K = 800;
+var PRESSURE_A = 1750;
+var PRESSURE_B = 195;
+/** Radio del "bola de fuego": evita singularidades a distancia cero. */
+function nearFieldRadius(charge) {
+	return .55 * Math.cbrt(Math.max(.01, charge)) + .4;
+}
+/**
+* @param charge   kg equivalentes de TNT
+* @param distance distancia libre hasta la superficie de la pieza (m)
+* @param cutoff   radio de efecto elegido por el usuario (m)
+*/
+function blastField(charge, distance, cutoff) {
+	const w = Math.max(.01, charge);
+	const d = Math.max(0, distance);
+	if (d >= cutoff) return {
+		overpressure: 0,
+		impulse: 0
+	};
+	const r = d + nearFieldRadius(w);
+	const edge = 1 - (d / cutoff) ** 2;
+	const conf = edge * edge;
+	return {
+		overpressure: (PRESSURE_A * w / (r * r * r) + PRESSURE_B * Math.cbrt(w * w) / (r * r)) * conf,
+		impulse: IMPULSE_K * w / (r * r) * conf
+	};
+}
+/**
+* Distancia a la que la sobrepresión cae por debajo de `limit` kPa (umbral de
+* rotura de vidrio). Sirve para proponer un radio de efecto coherente.
+*/
+function naturalRadius(charge, limit = 5) {
+	const w = Math.max(.01, charge);
+	let lo = .1;
+	let hi = 400;
+	for (let i = 0; i < 40; i++) {
+		const mid = (lo + hi) / 2;
+		const r = mid + nearFieldRadius(w);
+		if (PRESSURE_A * w / (r * r * r) + PRESSURE_B * Math.cbrt(w * w) / (r * r) > limit) lo = mid;
+		else hi = mid;
+	}
+	return lo;
+}
+/**
+* Radio (m, desde el foco) dentro del cual la sobrepresión basta para arruinar
+* un material de resistencia `strength` kPa.
+*
+* Sirve para acotar lo que una carga puede destruir de una sola pieza: media
+* docena de kilos de explosivo pegados a un forjado de cuarenta metros
+* cuadrados abren un boquete, no se llevan la planta entera. Sin esta
+* limitación cualquier carga en contacto destruía la pieza completa por grande
+* que fuera, y una carga mínima podía tirar un edificio.
+*/
+function destructiveRadius(charge, strength) {
+	const w = Math.max(.01, charge);
+	const limit = Math.max(1, strength * 3);
+	return Math.cbrt(PRESSURE_A * w / limit);
+}
+/** Rota `v` por el cuaternión `q`. Si `inverse`, aplica la rotación inversa. */
+function rotateVec(v, q, inverse = false) {
+	const qx = inverse ? -q.x : q.x;
+	const qy = inverse ? -q.y : q.y;
+	const qz = inverse ? -q.z : q.z;
+	const tx = 2 * (qy * v.z - qz * v.y);
+	const ty = 2 * (qz * v.x - qx * v.z);
+	const tz = 2 * (qx * v.y - qy * v.x);
+	return {
+		x: v.x + q.w * tx + (qy * tz - qz * ty),
+		y: v.y + q.w * ty + (qz * tx - qx * tz),
+		z: v.z + q.w * tz + (qx * ty - qy * tx)
+	};
+}
+var IDENTITY$1 = {
+	x: 0,
+	y: 0,
+	z: 0,
+	w: 1
+};
+/**
+* Área proyectada (m²) de una caja orientada vista desde la dirección `dir`.
+* Es lo que convierte el impulso específico en impulso real, y es la razón por
+* la que una losa ancha recibe mucho más empuje que una columna estrecha.
+*/
+function projectedArea(size, dir, q = IDENTITY$1) {
+	const l = rotateVec(dir, q, true);
+	const [w, h, d] = size;
+	return Math.abs(l.x) * h * d + Math.abs(l.y) * w * d + Math.abs(l.z) * w * h;
+}
+/** Distancia libre desde `p` hasta la superficie de una caja orientada. */
+function distanceToBox(p, center, size, q = IDENTITY$1) {
+	const rel = rotateVec({
+		x: p.x - center.x,
+		y: p.y - center.y,
+		z: p.z - center.z
+	}, q, true);
+	const hx = size[0] / 2;
+	const hy = size[1] / 2;
+	const hz = size[2] / 2;
+	const dx = Math.max(0, Math.abs(rel.x) - hx);
+	const dy = Math.max(0, Math.abs(rel.y) - hy);
+	const dz = Math.max(0, Math.abs(rel.z) - hz);
+	return Math.hypot(dx, dy, dz);
+}
+/**
+* ¿El segmento `from`→`to` atraviesa la caja? Devuelve el espesor recorrido
+* dentro de ella (0 si no la corta). Método de las rebanadas, sin rotación:
+* en esta ciudad casi todo está alineado con los ejes y el coste importa.
+*/
+function segmentThroughBox(from, to, box) {
+	const dx = to.x - from.x;
+	const dy = to.y - from.y;
+	const dz = to.z - from.z;
+	const len = Math.hypot(dx, dy, dz);
+	if (len < 1e-6) return 0;
+	const inv = 1 / len;
+	const d = [
+		dx * inv,
+		dy * inv,
+		dz * inv
+	];
+	const o = [
+		from.x,
+		from.y,
+		from.z
+	];
+	const c = [
+		box.center.x,
+		box.center.y,
+		box.center.z
+	];
+	const h = [
+		box.size[0] / 2,
+		box.size[1] / 2,
+		box.size[2] / 2
+	];
+	let tmin = 0;
+	let tmax = len;
+	for (let i = 0; i < 3; i++) {
+		const lo = c[i] - h[i];
+		const hi = c[i] + h[i];
+		if (Math.abs(d[i]) < 1e-9) {
+			if (o[i] < lo || o[i] > hi) return 0;
+			continue;
+		}
+		const inv2 = 1 / d[i];
+		let t1 = (lo - o[i]) * inv2;
+		let t2 = (hi - o[i]) * inv2;
+		if (t1 > t2) {
+			const tmp = t1;
+			t1 = t2;
+			t2 = tmp;
+		}
+		if (t1 > tmin) tmin = t1;
+		if (t2 < tmax) tmax = t2;
+		if (tmin > tmax) return 0;
+	}
+	return Math.max(0, tmax - tmin);
+}
+/** Punto de la superficie de la caja más cercano a `p` (en coordenadas mundo). */
+function closestPointOnBox(p, center, size, q = {
+	x: 0,
+	y: 0,
+	z: 0,
+	w: 1
+}) {
+	const rel = rotateVec({
+		x: p.x - center.x,
+		y: p.y - center.y,
+		z: p.z - center.z
+	}, q, true);
+	const hx = size[0] / 2;
+	const hy = size[1] / 2;
+	const hz = size[2] / 2;
+	const world = rotateVec({
+		x: Math.max(-hx, Math.min(hx, rel.x)),
+		y: Math.max(-hy, Math.min(hy, rel.y)),
+		z: Math.max(-hz, Math.min(hz, rel.z))
+	}, q);
+	return {
+		x: center.x + world.x,
+		y: center.y + world.y,
+		z: center.z + world.z
+	};
+}
+var G = 9.81;
+/** Coeficiente de seguridad del diseño: cuánta carga extra aguanta de fábrica. */
+var SAFETY = 2.8;
+/** Capacidad mínima propia de una pieza, aunque no soporte nada encima. */
+var SELF_CAPACITY = .5;
+/** Umbral de integridad por debajo del cual una pieza ya no sostiene nada. */
+var SUPPORT_MIN_INTEGRITY = .06;
+/** Desplome lateral admisible respecto a la planta inferior, en fracción de ancho. */
+var DRIFT_TOLERANCE = .42;
+function detectKind(members) {
+	if (members.length < 2) return "stack";
+	const stacked = members.filter((m) => (m.floorIndex ?? -1) >= 0);
+	if (stacked.length < 2) return "span";
+	for (let i = 1; i < stacked.length; i++) if (stacked[i].home.y <= stacked[i - 1].home.y + .05) return "span";
+	return members.length === stacked.length ? "stack" : "stack";
+}
+function prepare(g) {
+	if (g.kind === "stack") {
+		const floors = g.members.filter((m) => (m.floorIndex ?? -1) >= 0);
+		let above = 0;
+		for (let i = floors.length - 1; i >= 0; i--) {
+			const f = floors[i];
+			f.designLoad = above * G;
+			f.supportCapacity = SAFETY * f.designLoad + SELF_CAPACITY * f.mass * G;
+			above += f.mass;
+		}
+		for (const m of g.members) {
+			if ((m.floorIndex ?? -1) >= 0) continue;
+			m.designLoad = above * G;
+			m.supportCapacity = SAFETY * m.designLoad + SELF_CAPACITY * m.mass * G;
+		}
+	} else for (const m of g.members) {
+		m.designLoad = m.mass * G * 1.6;
+		m.supportCapacity = SAFETY * m.designLoad;
+	}
+	g.prepared = true;
+}
+var StructureSolver = class {
+	groups = /* @__PURE__ */ new Map();
+	dirty = true;
+	markDirty() {
+		this.dirty = true;
+	}
+	clear() {
+		this.groups.clear();
+		this.dirty = true;
+	}
+	ensure(bodies) {
+		if (!this.dirty) return;
+		this.groups.clear();
+		for (const sb of bodies) {
+			if (!sb.buildingId) continue;
+			let g = this.groups.get(sb.buildingId);
+			if (!g) {
+				g = {
+					id: sb.buildingId,
+					kind: "stack",
+					members: [],
+					prepared: false
+				};
+				this.groups.set(sb.buildingId, g);
+			}
+			g.members.push(sb);
+		}
+		for (const g of this.groups.values()) {
+			g.members.sort((a, b) => (a.floorIndex ?? 0) - (b.floorIndex ?? 0));
+			g.kind = detectKind(g.members);
+			prepare(g);
+		}
+		this.dirty = false;
+	}
+	groupOf(id) {
+		return this.groups.get(id);
+	}
+	/** Plantas todavía unidas de un edificio, de abajo arriba. */
+	attachedFloors(buildingId) {
+		const g = this.groups.get(buildingId);
+		if (!g) return [];
+		return g.members.filter((m) => m.attached && !m.destroyed);
+	}
+	/**
+	* Un paso del solver. Devuelve las piezas que deben soltarse este paso,
+	* ya marcadas con el retardo de propagación correspondiente.
+	*/
+	step(bodies, dt) {
+		this.ensure(bodies);
+		for (const g of this.groups.values()) {
+			if (!g.prepared) prepare(g);
+			if (g.kind === "stack") this.stepStack(g, dt);
+			else this.stepSpan(g, dt);
+		}
+	}
+	stepStack(g, dt) {
+		const floors = g.members.filter((m) => (m.floorIndex ?? -1) >= 0);
+		const props = g.members.filter((m) => (m.floorIndex ?? -1) < 0);
+		let above = 0;
+		for (let i = floors.length - 1; i >= 0; i--) {
+			const f = floors[i];
+			f.loadAbove = above * G;
+			if (f.attached && !f.destroyed) above += f.mass;
+		}
+		for (const p of props) p.loadAbove = above * G;
+		for (const f of g.members) {
+			if (!f.attached || f.destroyed) {
+				f.overloaded = false;
+				continue;
+			}
+			const capacity = f.supportCapacity * Math.pow(Math.max(0, f.integrity), 1.5);
+			const demand = f.loadAbove + f.lateralLoad * 2.5;
+			if (capacity <= 1 || demand > capacity) {
+				const over = capacity > 1 ? demand / capacity - 1 : 3;
+				f.integrity = Math.max(0, f.integrity - dt * (.5 + 1.8 * Math.min(3, over)));
+				f.overloaded = true;
+			} else f.overloaded = false;
+		}
+		let lostAt = -1;
+		let supportIntegrity = 1;
+		for (let i = 0; i < floors.length; i++) {
+			const f = floors[i];
+			if (f.destroyed || !f.attached) {
+				if (lostAt < 0) lostAt = i;
+				continue;
+			}
+			const failed = f.integrity <= .05 || f.forcedFail;
+			const unsupported = lostAt >= 0 || supportIntegrity < SUPPORT_MIN_INTEGRITY || i > 0 && this.drift(f, floors[i - 1]) > DRIFT_TOLERANCE;
+			if (failed || unsupported) {
+				if (lostAt < 0) lostAt = i;
+				if (f.releaseIn < 0) {
+					f.releaseIn = failed && !unsupported ? .02 : .06 + (i - lostAt) * .085;
+					f.failReason = failed ? "fallo" : "sin apoyo";
+				}
+			}
+			supportIntegrity = f.integrity;
+		}
+		for (const p of props) {
+			if (p.destroyed || !p.attached) continue;
+			if (p.integrity <= .05 || p.forcedFail) {
+				if (p.releaseIn < 0) {
+					p.releaseIn = .02;
+					p.failReason = "fallo";
+				}
+			}
+		}
+	}
+	drift(a, b) {
+		const ax = rbOf(a)?.translation() ?? a.home;
+		const bx = rbOf(b)?.translation() ?? b.home;
+		const dx = ax.x - bx.x;
+		const dz = ax.z - bx.z;
+		const w = Math.max(.5, Math.min(a.size[0], a.size[2]));
+		return Math.hypot(dx, dz) / w;
+	}
+	/**
+	* Estructuras horizontales: lo que no está conectado a un apoyo anclado al
+	* suelo se viene abajo. Un BFS por proximidad basta y es barato.
+	*/
+	stepSpan(g, dt) {
+		const live = g.members.filter((m) => m.attached && !m.destroyed);
+		for (const m of live) {
+			const capacity = m.supportCapacity * Math.pow(Math.max(0, m.integrity), 1.5);
+			const demand = m.mass * G + m.lateralLoad * 2.5;
+			if (capacity <= 1 || demand > capacity) {
+				const over = capacity > 1 ? demand / capacity - 1 : 3;
+				m.integrity = Math.max(0, m.integrity - dt * (.5 + 1.8 * Math.min(3, over)));
+				m.overloaded = true;
+			} else m.overloaded = false;
+		}
+		const sound = live.filter((m) => m.integrity > SUPPORT_MIN_INTEGRITY && !m.forcedFail);
+		const anchored = sound.filter((m) => m.home.y - m.size[1] / 2 <= .9);
+		const reached = new Set(anchored);
+		const queue = [...anchored];
+		while (queue.length) {
+			const cur = queue.pop();
+			for (const other of sound) {
+				if (reached.has(other)) continue;
+				if (Math.hypot(cur.home.x - other.home.x, (cur.home.y - other.home.y) * .8, cur.home.z - other.home.z) <= (Math.max(cur.size[0], cur.size[2]) + Math.max(other.size[0], other.size[2])) * .62 + .5) {
+					reached.add(other);
+					queue.push(other);
+				}
+			}
+		}
+		for (const m of live) {
+			const failed = m.integrity <= .05 || m.forcedFail;
+			if (failed || !reached.has(m)) {
+				if (m.releaseIn < 0) {
+					m.releaseIn = failed ? .02 : .06 + Math.random() * .05;
+					m.failReason = failed ? "fallo" : "sin apoyo";
+				}
+			}
+		}
+	}
+};
+/** Velocidad máxima que una sola onda expansiva puede imprimir (m/s). */
+var MAX_BLAST_DV = 40;
+/** Velocidad angular máxima tras una explosión (rad/s). */
+var MAX_BLAST_SPIN = 9;
+/** Empuje mínimo para que un objeto suelto llegue a moverse (m/s). */
+var FREE_RELEASE_DV = .32;
+/** Empuje mínimo para que una pieza estructural se desprenda de golpe (m/s). */
+var STRUCT_RELEASE_DV = 1.15;
+/** Salto de velocidad a partir del cual consideramos que hubo impacto (m/s). */
+var IMPACT_MIN_DV = 2.2;
+/**
+* Velocidad vertical ascendente máxima de una pieza estructural fuera de una
+* explosión. Un derrumbe puede lanzar cascotes, pero un forjado de treinta
+* toneladas nunca sube: si el solver de contactos genera esa energía, es un
+* artefacto numérico y se recorta.
+*/
+var MAX_STRUCTURAL_UP = 6;
+/** Velocidad máxima absoluta de cualquier cuerpo (m/s). */
+var MAX_SPEED = 60;
+/** Ventana tras una explosión en la que sí se admiten velocidades altas. */
+var BLAST_GRACE = .35;
+/** Transmisión de la onda a través de una pieza intacta. */
+var SHIELD_BASE = .3;
+var IDENTITY = {
+	x: 0,
+	y: 0,
+	z: 0,
+	w: 1
+};
 var fxId = 1;
 var debrisSeq = 1;
+var tmpDir = {
+	x: 0,
+	y: 0,
+	z: 0
+};
+/**
+* Acceso seguro al cuerpo de Rapier. Cuando una pieza se retira, React
+* desmonta su RigidBody y el puntero de WASM deja de ser válido; tocarlo
+* revienta el paso de física entero.
+*/
+function rbOf(sb) {
+	const rb = sb?.body;
+	if (!rb || sb.destroyed) return null;
+	try {
+		return rb.isValid() ? rb : null;
+	} catch {
+		return null;
+	}
+}
+/** Para las plantas de un edificio, el cristal es fachada: aguanta el esqueleto. */
+function frameMaterial(kind, material) {
+	if (kind !== "floor" && kind !== "column") return material;
+	const m = materialOf(material).id;
+	if (m === "vidrio") return "acero";
+	if (m === "ladrillo") return "hormigon";
+	return material;
+}
 var Simulation = class {
 	bodies = /* @__PURE__ */ new Map();
+	structure = new StructureSolver();
+	simTime = 0;
 	trauma = 0;
 	flash = 0;
-	simTime = 0;
+	fps = 60;
+	/** Viento como campo de velocidad real (m/s), no como fuerza mágica. */
 	wind = {
-		x: 0,
-		z: 0,
-		until: 0
+		vx: 0,
+		vz: 0,
+		until: 0,
+		strength: 0
+	};
+	/** Terremoto: aceleración del terreno (m/s²) con envolvente temporal. */
+	quake = {
+		amplitude: 0,
+		freq: 1.4,
+		until: 0,
+		start: 0,
+		dirX: 1,
+		dirZ: .35
 	};
 	rumble = 0;
 	rumbleIntensity = 0;
@@ -518,10 +1216,12 @@ var Simulation = class {
 	shockwaves = [];
 	dust = [];
 	debrisQueue = [];
+	retireQueue = [];
 	meteorQueue = [];
+	debrisAlive = 0;
 	chainWindow = 0;
 	chainCount = 0;
-	fps = 60;
+	lastBlastAt = -99;
 	scoreListeners = /* @__PURE__ */ new Set();
 	fxListeners = /* @__PURE__ */ new Set();
 	onScore(fn) {
@@ -540,13 +1240,23 @@ var Simulation = class {
 	}
 	reset() {
 		this.bodies.clear();
+		this.structure.clear();
+		this.simTime = 0;
 		this.trauma = 0;
 		this.flash = 0;
-		this.simTime = 0;
 		this.wind = {
-			x: 0,
-			z: 0,
-			until: 0
+			vx: 0,
+			vz: 0,
+			until: 0,
+			strength: 0
+		};
+		this.quake = {
+			amplitude: 0,
+			freq: 1.4,
+			until: 0,
+			start: 0,
+			dirX: 1,
+			dirZ: .35
 		};
 		this.rumble = 0;
 		this.rumbleIntensity = 0;
@@ -554,26 +1264,78 @@ var Simulation = class {
 		this.shockwaves = [];
 		this.dust = [];
 		this.debrisQueue = [];
+		this.retireQueue = [];
 		this.meteorQueue = [];
+		this.debrisAlive = 0;
 		this.chainWindow = 0;
 		this.chainCount = 0;
+		this.lastBlastAt = -99;
 	}
-	register(partial) {
-		const health = partial.health ?? 100;
-		this.bodies.set(partial.id, {
-			...partial,
-			health,
-			maxHealth: health,
+	register(input) {
+		const frame = frameMaterial(input.kind, input.material);
+		const volume = Math.max(1e-4, input.size[0] * input.size[1] * input.size[2]);
+		const mass = input.mass ?? massFor(input.kind, input.material, input.size, input.hollow);
+		const body = {
+			id: input.id,
+			kind: input.kind,
+			name: input.name,
+			buildingId: input.buildingId,
+			floorIndex: input.floorIndex,
+			material: input.material,
+			frame,
+			color: input.color,
+			size: input.size,
+			volume,
+			density: mass / volume,
+			mass,
+			resistance: input.resistance,
+			strength: strengthOf(frame, input.resistance, input.kind),
+			toughness: toughnessOf(frame, input.resistance, input.kind),
+			brittle: materialOf(input.material).brittle,
+			integrity: 1,
+			damageTaken: 0,
+			attached: input.kind !== "debris" && input.kind !== "meteor",
+			awakened: input.kind === "debris" || input.kind === "meteor",
+			destroyed: false,
+			releaseIn: -1,
+			failReason: "",
+			forcedFail: false,
+			overloaded: false,
+			home: {
+				x: input.position[0],
+				y: input.position[1],
+				z: input.position[2]
+			},
+			designLoad: 0,
+			supportCapacity: 0,
+			loadAbove: 0,
+			lateralLoad: 0,
+			damageDir: {
+				x: 0,
+				y: 0,
+				z: 0
+			},
 			body: null,
 			object: null,
-			awakened: false,
-			destroyed: false,
-			pendingImpulse: null,
-			pendingTorque: null,
 			awakenReact: null,
 			hideReact: null,
-			collapseDelay: 0
-		});
+			pendingImpulse: null,
+			pendingImpulsePoint: null,
+			pendingTorque: null,
+			pendingVelocity: null,
+			pendingAngVel: null,
+			prevVel: {
+				x: 0,
+				y: 0,
+				z: 0
+			},
+			impactCooldown: 0,
+			freeTime: 0,
+			age: 0
+		};
+		this.bodies.set(input.id, body);
+		if (input.kind === "debris") this.debrisAlive += 1;
+		if (input.buildingId) this.structure.markDirty();
 	}
 	attach(id, body, object, awakenReact, hideReact) {
 		const sb = this.bodies.get(id);
@@ -583,37 +1345,147 @@ var Simulation = class {
 		sb.awakenReact = awakenReact;
 		if (hideReact) sb.hideReact = hideReact;
 	}
+	/** Suelta la referencia al cuerpo de Rapier sin borrar la pieza. */
+	detach(id) {
+		const sb = this.bodies.get(id);
+		if (!sb) return;
+		sb.body = null;
+		sb.object = null;
+	}
 	unregister(id) {
+		const sb = this.bodies.get(id);
+		if (sb) {
+			if (sb.kind === "debris") this.debrisAlive = Math.max(0, this.debrisAlive - 1);
+			if (sb.buildingId) this.structure.markDirty();
+		}
 		this.bodies.delete(id);
 	}
 	get(id) {
 		return this.bodies.get(id);
 	}
-	awaken(sb) {
+	/** Densidad efectiva que debe usar el collider de Rapier. */
+	densityOf(kind, material, hollow, mass, size) {
+		if (mass && size) return mass / Math.max(1e-4, size[0] * size[1] * size[2]);
+		return densityFor(kind, material, hollow);
+	}
+	/**
+	* Convierte una pieza en cuerpo dinámico. Deliberadamente NO aplica ningún
+	* impulso: quien la suelta decide si además hay que empujarla. Por defecto,
+	* lo único que actúa es la gravedad.
+	*/
+	release(sb, reason = "") {
 		if (sb.destroyed) return;
 		if (sb.awakened) {
 			this.applyPending(sb);
 			return;
 		}
 		sb.awakened = true;
+		sb.attached = false;
+		sb.releaseIn = -1;
+		if (reason) sb.failReason = reason;
+		if (sb.buildingId) this.structure.markDirty();
 		this.noteChain();
 		sb.awakenReact?.();
+	}
+	/** Alias histórico usado por la interfaz ("Liberar"). */
+	awaken(sb) {
+		this.release(sb, sb.failReason || "manual");
 	}
 	noteChain() {
 		if (this.chainWindow <= 0) this.chainCount = 0;
 		this.chainWindow = 4;
 		this.chainCount += 1;
 	}
-	explode(x, y, z, power, radius) {
-		this.trauma = Math.min(1, this.trauma + .28 + power / 500);
-		this.flash = Math.min(1, .35 + power / 280);
+	applyPending(sb) {
+		const rb = rbOf(sb);
+		if (!rb || !sb.awakened) return;
+		try {
+			if (rb.bodyType() !== 0) rb.setBodyType(0, true);
+			rb.wakeUp();
+			if (sb.pendingVelocity) {
+				const v = rb.linvel();
+				rb.setLinvel({
+					x: v.x + sb.pendingVelocity.x,
+					y: v.y + sb.pendingVelocity.y,
+					z: v.z + sb.pendingVelocity.z
+				}, true);
+				sb.pendingVelocity = null;
+			}
+			if (sb.pendingAngVel) {
+				const a = rb.angvel();
+				rb.setAngvel({
+					x: a.x + sb.pendingAngVel.x,
+					y: a.y + sb.pendingAngVel.y,
+					z: a.z + sb.pendingAngVel.z
+				}, true);
+				sb.pendingAngVel = null;
+			}
+			if (sb.pendingImpulse) {
+				if (sb.pendingImpulsePoint) rb.applyImpulseAtPoint(sb.pendingImpulse, sb.pendingImpulsePoint, true);
+				else rb.applyImpulse(sb.pendingImpulse, true);
+				sb.pendingImpulse = null;
+				sb.pendingImpulsePoint = null;
+				this.clampSpin(rb);
+			}
+			if (sb.pendingTorque) {
+				rb.applyTorqueImpulse(sb.pendingTorque, true);
+				sb.pendingTorque = null;
+				this.clampSpin(rb);
+			}
+		} catch {}
+	}
+	clampSpin(rb) {
+		const a = rb.angvel();
+		const s = Math.hypot(a.x, a.y, a.z);
+		if (s > MAX_BLAST_SPIN) {
+			const k = MAX_BLAST_SPIN / s;
+			rb.setAngvel({
+				x: a.x * k,
+				y: a.y * k,
+				z: a.z * k
+			}, true);
+		}
+	}
+	/**
+	* Daño estructural puro. No mueve nada ni suelta nada: sólo reduce la
+	* capacidad. Quién se cae y cuándo lo decide el solver estructural.
+	*/
+	damage(sb, amount, dir) {
+		if (amount <= 0 || sb.destroyed) return 0;
+		const before = sb.integrity;
+		sb.integrity = Math.max(0, sb.integrity - amount);
+		const applied = before - sb.integrity;
+		sb.damageTaken += applied;
+		if (dir) {
+			sb.damageDir.x += dir.x * applied;
+			sb.damageDir.y += dir.y * applied;
+			sb.damageDir.z += dir.z * applied;
+		}
+		if (sb.integrity <= 0) {
+			sb.forcedFail = true;
+			if (!sb.attached) this.fragment(sb);
+			else if (sb.releaseIn < 0) sb.releaseIn = .02;
+		}
+		return applied;
+	}
+	/**
+	* @param charge carga en kg equivalentes de TNT
+	* @param radius radio de efecto (m). Fuera de él la onda no existe.
+	*/
+	explode(x, y, z, charge, radius) {
+		const w = Math.max(.05, charge);
+		const r = Math.max(1.5, radius);
+		this.lastBlastAt = this.simTime;
+		const scale = Math.min(1, Math.cbrt(w) / 8);
+		this.trauma = Math.min(1, this.trauma + .12 + scale * .7);
+		this.flash = Math.min(1, .18 + scale * .85);
 		this.explosions.push({
 			id: fxId++,
 			x,
 			y,
 			z,
-			power,
-			radius,
+			power: w,
+			radius: r,
 			t: 0
 		});
 		this.shockwaves.push({
@@ -621,7 +1493,7 @@ var Simulation = class {
 			x,
 			y,
 			z,
-			radius,
+			radius: r,
 			t: 0
 		});
 		this.dust.push({
@@ -629,49 +1501,79 @@ var Simulation = class {
 			x,
 			y,
 			z,
-			power,
+			power: w,
+			color: "#c1b6a4",
 			t: 0
 		});
 		this.emitFx();
+		const origin = {
+			x,
+			y,
+			z
+		};
+		const list = [...this.bodies.values()];
 		let hit = 0;
 		let destroyed = 0;
 		let damageAcc = 0;
-		for (const sb of this.bodies.values()) {
-			if (!sb.body || sb.destroyed) continue;
-			const p = sb.body.translation();
-			const dx = p.x - x;
-			const dy = p.y - y;
-			const dz = p.z - z;
-			const dist = Math.hypot(dx, dy, dz);
-			if (dist > radius || dist < 1e-4) continue;
-			const falloff = 1 - dist / radius;
-			const intensity = power * falloff * falloff;
-			const dmg = intensity * (.55 + (1 - sb.resistance / 100) * .9);
-			sb.health = Math.max(0, sb.health - dmg);
-			damageAcc += dmg;
-			hit += 1;
-			if (intensity >= 12 + sb.resistance * .45 || sb.health < sb.maxHealth * .88) {
-				const inv = 1 / dist;
-				const mass = Math.max(8, sb.mass);
-				const mag = intensity * .18 * Math.sqrt(mass);
+		for (const sb of list) {
+			if (sb.destroyed || sb.kind === "terrain") continue;
+			const rb0 = rbOf(sb);
+			const p = rb0?.translation() ?? sb.home;
+			const q = rb0?.rotation() ?? IDENTITY;
+			const center = {
+				x: p.x,
+				y: p.y,
+				z: p.z
+			};
+			const dist = distanceToBox(origin, center, sb.size, q);
+			if (dist >= r) continue;
+			const shield = this.occlusion(origin, center, sb, list, r);
+			if (shield <= .015) continue;
+			const field = blastField(w, dist, r);
+			const overpressure = field.overpressure * shield;
+			const specificImpulse = field.impulse * shield;
+			if (overpressure <= .05 && specificImpulse <= .05) continue;
+			let dx = center.x - x;
+			let dy = center.y - y;
+			let dz = center.z - z;
+			let len = Math.hypot(dx, dy, dz);
+			if (len < 1e-4) {
+				const a = Math.random() * Math.PI * 2;
+				dx = Math.cos(a);
+				dy = .12;
+				dz = Math.sin(a);
+				len = Math.hypot(dx, dy, dz);
+			}
+			tmpDir.x = dx / len;
+			tmpDir.y = dy / len;
+			tmpDir.z = dz / len;
+			let applied = 0;
+			if (overpressure > sb.strength) {
+				const frac = Math.min(1, Math.pow((overpressure - sb.strength) / (sb.strength * 3.2), .8));
+				const rd = destructiveRadius(w, sb.strength);
+				const coverage = Math.min(1, 4 / 3 * Math.PI * rd * rd * rd / sb.volume);
+				applied = this.damage(sb, frac * coverage, tmpDir);
+				damageAcc += applied * 100;
+			}
+			const impulse = specificImpulse * projectedArea(sb.size, tmpDir, q);
+			const dv = Math.min(MAX_BLAST_DV, impulse / sb.mass);
+			if (dv > .02) hit += 1;
+			if (dv > .25) damageAcc += this.damage(sb, Math.min(.5, dv / 9), tmpDir) * 100;
+			const structural = sb.attached && !!sb.buildingId;
+			if (dv >= (structural ? STRUCT_RELEASE_DV : FREE_RELEASE_DV) || !sb.attached && sb.awakened && dv > .02) {
+				const point = closestPointOnBox(origin, center, sb.size, q);
+				const j = dv * sb.mass;
 				sb.pendingImpulse = {
-					x: dx * inv * mag,
-					y: dy * inv * mag + mag * .42,
-					z: dz * inv * mag
+					x: tmpDir.x * j,
+					y: tmpDir.y * j,
+					z: tmpDir.z * j
 				};
-				sb.pendingTorque = {
-					x: (Math.random() - .5) * mag * .18,
-					y: (Math.random() - .5) * mag * .18,
-					z: (Math.random() - .5) * mag * .18
-				};
-				this.awaken(sb);
+				sb.pendingImpulsePoint = point;
+				if (structural) sb.forcedFail = true;
+				this.release(sb, structural ? "onda expansiva" : "empuje");
 			}
-			if (sb.health <= 0) {
-				this.fragment(sb);
-				destroyed += 1;
-			}
+			if (sb.integrity <= 0 && !sb.destroyed && !sb.attached) destroyed += 1;
 		}
-		this.scheduleUnsupported();
 		this.emitScore({
 			damage: damageAcc,
 			destroyed: 0,
@@ -684,107 +1586,85 @@ var Simulation = class {
 			chain: this.chainCount
 		};
 	}
-	applyPending(sb) {
-		const rb = sb.body;
-		if (!rb || !sb.awakened) return;
-		try {
-			rb.setBodyType(0, true);
-			rb.wakeUp();
-			if (sb.pendingImpulse) {
-				rb.applyImpulse(sb.pendingImpulse, true);
-				sb.pendingImpulse = null;
-			}
-			if (sb.pendingTorque) {
-				rb.applyTorqueImpulse(sb.pendingTorque, true);
-				sb.pendingTorque = null;
-			}
-		} catch {}
-	}
-	fragment(sb) {
-		if (sb.destroyed) return;
-		sb.destroyed = true;
-		sb.hideReact?.();
-		const rb = sb.body;
-		if (rb && sb.kind !== "debris") {
-			const p = rb.translation();
-			const v = rb.linvel();
-			const [w, h, d] = sb.size;
-			const pieces = w * h * d > 8 ? 5 : 3;
-			for (let i = 0; i < pieces; i++) {
-				const s = .32 + Math.random() * .22;
-				this.debrisQueue.push({
-					id: `debris-${debrisSeq++}`,
-					x: p.x + (Math.random() - .5) * w * .4,
-					y: p.y + (Math.random() - .5) * h * .3,
-					z: p.z + (Math.random() - .5) * d * .4,
-					vx: v.x + (Math.random() - .5) * 6,
-					vy: v.y + 2 + Math.random() * 4,
-					vz: v.z + (Math.random() - .5) * 6,
-					w: Math.max(.35, w * s),
-					h: Math.max(.28, h * s),
-					d: Math.max(.35, d * s),
-					color: sb.color,
-					material: sb.material
-				});
-			}
-			this.emitFx();
+	/**
+	* Atenuación de la onda por lo que se interpone. Recorre las piezas que
+	* cortan el segmento foco→objetivo; cada obstáculo intacto deja pasar poco,
+	* y uno ya destrozado deja pasar casi todo. Por eso abrir un boquete en la
+	* planta baja hace que la siguiente carga llegue mucho más adentro.
+	*/
+	occlusion(origin, target, self, list, radius) {
+		let shield = 1;
+		for (const other of list) {
+			if (other === self || other.destroyed || !other.attached) continue;
+			if (other.kind === "terrain" || other.kind === "debris") continue;
+			const p = rbOf(other)?.translation() ?? other.home;
+			const thickness = segmentThroughBox(origin, target, {
+				center: {
+					x: p.x,
+					y: p.y,
+					z: p.z
+				},
+				size: other.size
+			});
+			if (thickness <= .05) continue;
+			const pass = SHIELD_BASE + .7 * (1 - Math.min(1, thickness / 2.2 * (.35 + other.integrity * .65)));
+			shield *= pass;
+			if (shield < .015) return 0;
 		}
-		this.emitScore({
-			damage: 20,
-			destroyed: 1,
-			chain: this.chainCount,
-			buildingId: sb.buildingId,
-			kind: sb.kind
-		});
+		return shield;
 	}
+	shockwave(x, z, charge) {
+		this.explode(x, 1.1, z, charge, naturalRadius(charge) * 1.25);
+	}
+	suggestedRadius(charge) {
+		return naturalRadius(charge);
+	}
+	/**
+	* El terremoto no lanza nada hacia arriba: impone una aceleración del
+	* terreno horizontal y oscilante. Las estructuras acusan el cortante en la
+	* base (proporcional a la masa que llevan encima), y los cuerpos sueltos
+	* reciben la fuerza de inercia correspondiente.
+	*/
 	earthquake(intensity) {
-		this.rumble = 3.2;
-		this.rumbleIntensity = intensity;
-		this.trauma = Math.min(1, this.trauma + .25 + intensity * .2);
+		const i = Math.max(0, Math.min(1.2, intensity));
+		const a = Math.random() * Math.PI * 2;
+		this.quake = {
+			amplitude: i * 5.2,
+			freq: 1.1 + i * .8,
+			until: this.simTime + 3 + i * 4,
+			start: this.simTime,
+			dirX: Math.cos(a),
+			dirZ: Math.sin(a)
+		};
+		this.rumble = this.quake.until - this.simTime;
+		this.rumbleIntensity = i;
+		this.trauma = Math.min(1, this.trauma + .2 + i * .35);
 		this.emitFx();
-		for (const sb of this.bodies.values()) {
-			if (!sb.body || sb.destroyed) continue;
-			if (sb.kind === "terrain") continue;
-			if (sb.body.translation().y > 14) continue;
-			const chance = intensity * (1.1 - sb.resistance / 140);
-			if (Math.random() < chance * .55 || intensity > .75) {
-				const mass = Math.max(8, sb.mass);
-				const mag = intensity * mass * 1.8;
-				sb.pendingImpulse = {
-					x: (Math.random() - .5) * mag * 2.2,
-					y: intensity * mass * .55,
-					z: (Math.random() - .5) * mag * 2.2
-				};
-				this.awaken(sb);
-			}
-		}
-		this.scheduleUnsupported();
 		this.emitScore({
-			damage: intensity * 40,
+			damage: i * 20,
 			destroyed: 0,
 			chain: this.chainCount,
 			kind: "earthquake"
 		});
 	}
-	shockwave(x, z, power) {
-		this.explode(x, 1.2, z, power * .75, 10 + power * .18);
-	}
-	startWind(strength, dirX = 1, dirZ = .15) {
+	startWind(strength, dirX = 1, dirZ = .18) {
 		const len = Math.hypot(dirX, dirZ) || 1;
+		const speed = Math.max(0, Math.min(1.2, strength)) * 45;
 		this.wind = {
-			x: dirX / len * strength * 18,
-			z: dirZ / len * strength * 18,
-			until: this.simTime + 4.5
+			vx: dirX / len * speed,
+			vz: dirZ / len * speed,
+			until: this.simTime + 8,
+			strength
 		};
-		for (const sb of this.bodies.values()) {
-			if (sb.kind === "terrain" || sb.destroyed) continue;
-			if (sb.resistance < 50 || strength > .7) this.awaken(sb);
-		}
 	}
 	collapseBuilding(buildingId) {
-		[...this.bodies.values()].filter((b) => b.buildingId === buildingId && !b.destroyed).sort((a, b) => (a.floorIndex ?? 0) - (b.floorIndex ?? 0)).forEach((sb, i) => {
-			sb.collapseDelay = .05 + i * .07;
-		});
+		const pieces = [...this.bodies.values()].filter((b) => b.buildingId === buildingId && !b.destroyed && b.attached);
+		if (!pieces.length) return;
+		const base = pieces.reduce((min, p) => Math.min(min, p.floorIndex ?? 0), 99);
+		for (const sb of pieces) if ((sb.floorIndex ?? 0) <= base) {
+			sb.integrity = Math.min(sb.integrity, .02);
+			sb.forcedFail = true;
+		} else sb.integrity = Math.min(sb.integrity, .55);
 	}
 	collapseAll() {
 		new Set([...this.bodies.values()].map((b) => b.buildingId).filter(Boolean)).forEach((id) => this.collapseBuilding(id));
@@ -798,111 +1678,356 @@ var Simulation = class {
 		});
 		this.emitFx();
 	}
-	scheduleUnsupported() {
-		const byBuilding = /* @__PURE__ */ new Map();
-		for (const sb of this.bodies.values()) {
-			if (!sb.buildingId || sb.destroyed) continue;
-			const list = byBuilding.get(sb.buildingId) ?? [];
-			list.push(sb);
-			byBuilding.set(sb.buildingId, list);
-		}
-		for (const list of byBuilding.values()) {
-			list.sort((a, b) => (a.floorIndex ?? 0) - (b.floorIndex ?? 0));
-			let lost = false;
-			for (const sb of list) {
-				if (lost && !sb.awakened) sb.collapseDelay = .08 + (sb.floorIndex ?? 0) * .05;
-				if (sb.awakened || sb.destroyed || sb.health < sb.maxHealth * .4) lost = true;
+	fragment(sb) {
+		if (sb.destroyed) return;
+		sb.destroyed = true;
+		sb.integrity = 0;
+		if (sb.buildingId) this.structure.markDirty();
+		sb.hideReact?.();
+		const rb = sb.body;
+		if (rb && sb.kind !== "debris" && this.debrisAlive < 110) {
+			const p = rb.translation();
+			const v = rb.linvel();
+			const [w, h, d] = sb.size;
+			const count = Math.max(2, Math.min(7, Math.round(Math.cbrt(sb.volume) * 1.9 * (.55 + sb.brittle))));
+			const pieceVolume = sb.volume * .5 / count;
+			const side = Math.cbrt(pieceVolume);
+			for (let i = 0; i < count; i++) {
+				const jitter = .75 + Math.random() * .6;
+				const ox = (Math.random() - .5) * w * .55;
+				const oy = (Math.random() - .5) * h * .55;
+				const oz = (Math.random() - .5) * d * .55;
+				const spread = Math.hypot(ox, oy, oz) || 1;
+				const burst = 1.1 + sb.brittle * 2.4;
+				this.debrisQueue.push({
+					id: `debris-${debrisSeq++}`,
+					x: p.x + ox,
+					y: p.y + oy,
+					z: p.z + oz,
+					vx: v.x + ox / spread * burst + (Math.random() - .5) * .8,
+					vy: v.y + oy / spread * burst * .6,
+					vz: v.z + oz / spread * burst + (Math.random() - .5) * .8,
+					w: Math.max(.26, Math.min(w * .7, side * jitter)),
+					h: Math.max(.24, Math.min(h * .7, side * jitter)),
+					d: Math.max(.26, Math.min(d * .7, side * jitter)),
+					color: sb.color,
+					material: sb.material
+				});
 			}
+			this.dust.push({
+				id: fxId++,
+				x: p.x,
+				y: p.y,
+				z: p.z,
+				power: Math.min(60, sb.volume * .6),
+				color: materialOf(sb.material).dust,
+				t: 0
+			});
+			this.emitFx();
+		}
+		sb.body = null;
+		sb.object = null;
+		this.emitScore({
+			damage: 12,
+			destroyed: 1,
+			chain: this.chainCount,
+			buildingId: sb.buildingId,
+			kind: sb.kind
+		});
+	}
+	/** Se ejecuta antes de cada paso de Rapier, con el dt real del paso. */
+	stepSim(dt) {
+		if (dt <= 0) return;
+		try {
+			this.stepSimInner(dt);
+		} catch (err) {
+			if (typeof console !== "undefined") console.warn("[sim] paso interrumpido", err);
 		}
 	}
-	tickFx(dt) {
+	stepSimInner(dt) {
 		this.simTime += dt;
 		this.trauma = Math.max(0, this.trauma - dt * 1.15);
-		this.flash = Math.max(0, this.flash - dt * 2.4);
+		this.flash = Math.max(0, this.flash - dt * 2.6);
 		this.chainWindow = Math.max(0, this.chainWindow - dt);
 		if (this.chainWindow <= 0) this.chainCount = 0;
 		this.rumble = Math.max(0, this.rumble - dt);
+		this.applyEnvironment(dt);
+		this.structure.step(this.bodies.values(), dt);
+		this.processReleases(dt);
+		this.tickFxTimers(dt);
+	}
+	applyEnvironment(dt) {
+		const windy = this.simTime < this.wind.until;
+		const quaking = this.simTime < this.quake.until;
+		if (!windy && !quaking) return;
+		let qa = 0;
+		if (quaking) {
+			const t = this.simTime - this.quake.start;
+			const total = this.quake.until - this.quake.start;
+			const env = Math.min(1, t / .4) * Math.max(0, 1 - t / total) ** .7;
+			qa = this.quake.amplitude * env * Math.sin(t * this.quake.freq * Math.PI * 2);
+		}
 		for (const sb of this.bodies.values()) {
-			if (sb.collapseDelay > 0) {
-				sb.collapseDelay -= dt;
-				if (sb.collapseDelay <= 0) {
-					const mass = Math.max(8, sb.mass);
-					sb.pendingImpulse = {
-						x: (Math.random() - .5) * mass * .4,
-						y: -mass * .2,
-						z: (Math.random() - .5) * mass * .4
-					};
-					this.awaken(sb);
+			const rb = rbOf(sb);
+			if (!rb) continue;
+			if (sb.attached) {
+				let lateral = 0;
+				if (quaking) {
+					const massAbove = sb.loadAbove / G + sb.mass;
+					lateral += Math.abs(qa) * massAbove * .55;
+				}
+				if (windy) {
+					const speed = Math.hypot(this.wind.vx, this.wind.vz);
+					const area = sb.size[1] * Math.max(sb.size[0], sb.size[2]);
+					lateral += .6125 * 1.3 * area * speed * speed;
+				}
+				sb.lateralLoad = lateral;
+				continue;
+			}
+			sb.lateralLoad = 0;
+			if (!sb.awakened) continue;
+			let fx = 0;
+			let fz = 0;
+			if (quaking) {
+				fx += -qa * this.quake.dirX * sb.mass;
+				fz += -qa * this.quake.dirZ * sb.mass;
+			}
+			if (windy) {
+				const v = rb.linvel();
+				const rx = this.wind.vx - v.x;
+				const rz = this.wind.vz - v.z;
+				const rel = Math.hypot(rx, rz);
+				if (rel > .1) {
+					const k = .704375 * (sb.size[1] * Math.max(sb.size[0], sb.size[2])) * rel;
+					fx += k * rx;
+					fz += k * rz;
 				}
 			}
-			if (sb.awakened && sb.body && !sb.destroyed) {
-				if (sb.body.translation().y < -12) this.fragment(sb);
-			}
-		}
-		this.explosions = this.explosions.filter((e) => {
-			e.t += dt;
-			return e.t < 1.6;
-		});
-		this.shockwaves = this.shockwaves.filter((e) => {
-			e.t += dt;
-			return e.t < 1.1;
-		});
-		this.dust = this.dust.filter((e) => {
-			e.t += dt;
-			return e.t < 2.4;
-		});
-	}
-	applyWindAndRumble() {
-		const rumbling = this.rumble > 0;
-		const windy = this.simTime < this.wind.until;
-		if (!rumbling && !windy) return;
-		for (const sb of this.bodies.values()) {
-			const rb = sb.body;
-			if (!rb || sb.destroyed || !sb.awakened) continue;
-			const mass = Math.max(4, sb.mass);
-			if (windy) rb.addForce({
-				x: this.wind.x * mass * .35,
+			rb.resetForces(false);
+			if (fx !== 0 || fz !== 0) rb.addForce({
+				x: fx,
 				y: 0,
-				z: this.wind.z * mass * .35
+				z: fz
 			}, true);
-			if (rumbling) {
-				const k = this.rumbleIntensity * mass * 2.4;
-				rb.applyImpulse({
-					x: (Math.random() - .5) * k,
-					y: Math.random() * k * .12,
-					z: (Math.random() - .5) * k
-				}, true);
-			}
 		}
+	}
+	processReleases(dt) {
+		for (const sb of this.bodies.values()) {
+			sb.age += dt;
+			if (sb.impactCooldown > 0) sb.impactCooldown -= dt;
+			if (sb.awakened && !sb.destroyed) sb.freeTime += dt;
+			if (sb.releaseIn >= 0 && sb.attached && !sb.destroyed) {
+				sb.releaseIn -= dt;
+				if (sb.releaseIn <= 0) {
+					const dd = sb.damageDir;
+					const len = Math.hypot(dd.x, dd.z);
+					const ang = Math.random() * Math.PI * 2;
+					const wobble = .25 + Math.random() * .45;
+					let vx = Math.cos(ang) * wobble;
+					let vz = Math.sin(ang) * wobble;
+					if (len > .01) {
+						const k = Math.min(.9, len * .6);
+						vx += dd.x / len * k;
+						vz += dd.z / len * k;
+					}
+					sb.pendingVelocity = {
+						x: vx,
+						y: 0,
+						z: vz
+					};
+					const lean = Math.hypot(vx, vz);
+					const spin = .18 + Math.random() * .4;
+					if (lean > .001) sb.pendingAngVel = {
+						x: vz / lean * spin,
+						y: (Math.random() - .5) * .25,
+						z: -(vx / lean) * spin
+					};
+					this.release(sb);
+				}
+			}
+			if (sb.awakened && !sb.destroyed && sb.integrity <= 0 && sb.kind !== "debris") {
+				if (sb.freeTime > .28) this.fragment(sb);
+			}
+			const rbOut = sb.awakened ? rbOf(sb) : null;
+			if (rbOut) {
+				if (rbOut.translation().y < -18) {
+					if (sb.kind === "debris") this.retire(sb);
+					else this.fragment(sb);
+				}
+			}
+			if (sb.kind === "debris" && sb.age > 26 && rbOf(sb)?.isSleeping()) this.retire(sb);
+		}
+	}
+	retire(sb) {
+		if (sb.destroyed) return;
+		sb.destroyed = true;
+		this.retireQueue.push(sb.id);
+		sb.hideReact?.();
+		sb.body = null;
+		sb.object = null;
+	}
+	/** Se ejecuta después de cada paso de Rapier: detecta impactos. */
+	postStep(dt) {
+		if (dt <= 0) return;
+		try {
+			this.postStepInner(dt);
+		} catch (err) {
+			if (typeof console !== "undefined") console.warn("[sim] postpaso interrumpido", err);
+		}
+	}
+	postStepInner(dt) {
+		const gdt = G * dt;
+		const impacts = [];
+		for (const sb of this.bodies.values()) {
+			if (!sb.awakened) continue;
+			const rb = rbOf(sb);
+			if (!rb) continue;
+			const v = rb.linvel();
+			const dvx = v.x - sb.prevVel.x;
+			const dvy = v.y - sb.prevVel.y + gdt;
+			const dvz = v.z - sb.prevVel.z;
+			sb.prevVel.x = v.x;
+			sb.prevVel.y = v.y;
+			sb.prevVel.z = v.z;
+			this.clampVelocity(sb, rb, v);
+			if (sb.impactCooldown > 0) continue;
+			const dv = Math.hypot(dvx, dvy, dvz);
+			if (dv >= IMPACT_MIN_DV) impacts.push({
+				sb,
+				dv
+			});
+		}
+		for (const { sb, dv } of impacts) this.resolveImpact(sb, dv);
+	}
+	/**
+	* El solver de contactos puede inventar energía cuando chocan cuerpos con
+	* masas muy dispares o muy interpenetrados. Aquí se le pone freno: nada sube
+	* como un cohete sin una explosión reciente detrás.
+	*/
+	clampVelocity(sb, rb, v) {
+		const recentBlast = this.simTime - this.lastBlastAt < BLAST_GRACE;
+		let vx = v.x;
+		let vy = v.y;
+		let vz = v.z;
+		let touched = false;
+		if ((sb.kind === "floor" || sb.kind === "bridge" || sb.kind === "column" || sb.kind === "core") && !recentBlast && vy > MAX_STRUCTURAL_UP) {
+			vy = MAX_STRUCTURAL_UP;
+			touched = true;
+		}
+		const speed = Math.hypot(vx, vy, vz);
+		if (speed > MAX_SPEED) {
+			const k = MAX_SPEED / speed;
+			vx *= k;
+			vy *= k;
+			vz *= k;
+			touched = true;
+		}
+		if (touched) {
+			rb.setLinvel({
+				x: vx,
+				y: vy,
+				z: vz
+			}, false);
+			sb.prevVel.x = vx;
+			sb.prevVel.y = vy;
+			sb.prevVel.z = vz;
+		}
+	}
+	/**
+	* Un impacto reparte energía: parte se la queda la pieza que golpea y parte
+	* se transmite a lo que hay debajo. Así un forjado que cae daña al de abajo
+	* y el colapso progresa en vez de detenerse.
+	*/
+	resolveImpact(sb, dv) {
+		sb.impactCooldown = .1;
+		const specific = .5 * dv * dv;
+		const self = Math.min(.9, specific / Math.max(1, sb.toughness));
+		if (self > .004) this.damage(sb, self);
+		const energy = .5 * sb.mass * dv * dv;
+		if (energy < 4e3) return;
+		const p = rbOf(sb)?.translation();
+		if (!p) return;
+		const reach = Math.max(sb.size[0], sb.size[2]) * .75 + 1.6;
+		const targets = [];
+		for (const other of this.bodies.values()) {
+			if (other === sb || other.destroyed) continue;
+			if (other.kind === "terrain") continue;
+			const q = rbOf(other)?.translation() ?? other.home;
+			const dy = p.y - q.y;
+			if (dy < -other.size[1] || dy > other.size[1] + reach) continue;
+			if (Math.hypot(p.x - q.x, p.z - q.z) > reach + Math.max(other.size[0], other.size[2]) * .5) continue;
+			targets.push(other);
+			if (targets.length >= 5) break;
+		}
+		if (!targets.length) return;
+		const share = energy * .5 / targets.length;
+		for (const t of targets) {
+			const dmg = Math.min(.8, share / Math.max(1, t.mass * t.toughness));
+			if (dmg > .004) this.damage(t, dmg);
+		}
+		if (energy > 6e4) {
+			this.trauma = Math.min(1, this.trauma + Math.min(.25, energy / 3e6));
+			this.dust.push({
+				id: fxId++,
+				x: p.x,
+				y: p.y - sb.size[1] * .5,
+				z: p.z,
+				power: Math.min(40, energy / 4e4),
+				color: materialOf(sb.material).dust,
+				t: 0
+			});
+			this.emitFx();
+		}
+	}
+	tickFxTimers(dt) {
+		if (this.explosions.length) this.explosions = this.explosions.filter((e) => {
+			e.t += dt;
+			return e.t < 1.8;
+		});
+		if (this.shockwaves.length) this.shockwaves = this.shockwaves.filter((e) => {
+			e.t += dt;
+			return e.t < 1.2;
+		});
+		if (this.dust.length) this.dust = this.dust.filter((e) => {
+			e.t += dt;
+			return e.t < 2.6;
+		});
 	}
 	placeAt(id, x, z) {
 		const sb = this.bodies.get(id);
-		if (!sb?.body || sb.destroyed) return;
-		const y = Math.max(sb.size[1] / 2 + .05, sb.body.translation().y);
-		sb.body.setTranslation({
+		const rb = rbOf(sb);
+		if (!sb || !rb) return;
+		const y = Math.max(sb.size[1] / 2 + .05, rb.translation().y);
+		rb.setTranslation({
 			x,
 			y,
 			z
 		}, true);
-		sb.body.setLinvel({
+		rb.setLinvel({
 			x: 0,
 			y: 0,
 			z: 0
 		}, true);
-		sb.body.setAngvel({
+		rb.setAngvel({
 			x: 0,
 			y: 0,
 			z: 0
 		}, true);
+		sb.home = {
+			x,
+			y,
+			z
+		};
+		if (sb.buildingId) this.structure.markDirty();
 	}
 	rotateY(id, dyaw) {
-		const sb = this.bodies.get(id);
-		if (!sb?.body || sb.destroyed) return;
-		const r = sb.body.rotation();
+		const rb = rbOf(this.bodies.get(id));
+		if (!rb) return;
+		const r = rb.rotation();
 		const half = dyaw / 2;
 		const sy = Math.sin(half);
 		const cy = Math.cos(half);
-		sb.body.setRotation({
+		rb.setRotation({
 			x: cy * r.x + sy * r.z,
 			y: cy * r.y + sy * r.w,
 			z: cy * r.z - sy * r.x,
@@ -912,27 +2037,40 @@ var Simulation = class {
 	liveState(id) {
 		const sb = this.bodies.get(id);
 		if (!sb) return null;
-		const p = sb.body?.translation();
-		const r = sb.body?.rotation();
-		const v = sb.body?.linvel();
+		const rb = rbOf(sb);
+		const p = rb?.translation();
+		const r = rb?.rotation();
+		const v = rb?.linvel();
 		const speed = v ? Math.hypot(v.x, v.y, v.z) : 0;
 		let estado = "Estable";
 		if (sb.destroyed || p && p.y < -4) estado = "Destruido";
 		else if (sb.awakened && speed > 1.5) estado = "En colapso";
-		else if (sb.awakened) estado = "Inestable";
-		else if (sb.health < sb.maxHealth * .45) estado = "Fisurado grave";
-		else if (sb.health < sb.maxHealth * .8) estado = "Fisurado";
+		else if (sb.awakened) estado = "Suelto";
+		else if (sb.releaseIn >= 0) estado = "A punto de ceder";
+		else if (sb.overloaded) estado = "Sobrecargado";
+		else if (sb.integrity < .45) estado = "Inestable";
+		else if (sb.integrity < .85) estado = "Dañado";
+		const capacity = sb.supportCapacity * Math.pow(Math.max(0, sb.integrity), 1.5);
+		const uso = capacity > 1 ? Math.min(999, sb.loadAbove / capacity * 100) : 0;
 		return {
 			...sb,
-			px: p?.x ?? 0,
-			py: p?.y ?? 0,
-			pz: p?.z ?? 0,
+			px: p?.x ?? sb.home.x,
+			py: p?.y ?? sb.home.y,
+			pz: p?.z ?? sb.home.z,
 			rx: r?.x ?? 0,
 			ry: r?.y ?? 0,
 			rz: r?.z ?? 0,
 			rw: r?.w ?? 1,
 			speed,
-			estado
+			estado,
+			integridad: sb.integrity,
+			integridadLabel: integrityLabel(sb.integrity),
+			soporte: sb.attached,
+			cargaSoportada: sb.loadAbove,
+			capacidad: capacity,
+			usoCapacidad: uso,
+			health: sb.integrity * 100,
+			maxHealth: 100
 		};
 	}
 	buildingDestroyed(buildingId) {
@@ -940,14 +2078,58 @@ var Simulation = class {
 		if (!pieces.length) return false;
 		return pieces.filter((b) => {
 			if (b.destroyed) return true;
-			const p = b.body?.translation();
-			return b.awakened && p && (p.y < 1.2 || Math.abs(p.x) + Math.abs(p.z) > 80);
+			const p = rbOf(b)?.translation();
+			return b.awakened && p && (p.y < 1.5 || Math.abs(p.x) + Math.abs(p.z) > 80);
 		}).length / pieces.length > .55;
 	}
 	bridgeDown() {
 		const segs = [...this.bodies.values()].filter((b) => b.kind === "bridge");
 		if (!segs.length) return false;
 		return segs.filter((s) => s.awakened || s.destroyed).length >= segs.length * .5;
+	}
+	/** Resumen para pruebas automáticas y diagnóstico. */
+	probe() {
+		let awake = 0;
+		let destroyed = 0;
+		let maxY = -Infinity;
+		let maxSpeed = 0;
+		let maxUpSpeed = 0;
+		let below = 0;
+		let flying = null;
+		for (const sb of this.bodies.values()) {
+			if (sb.destroyed) {
+				destroyed += 1;
+				continue;
+			}
+			if (sb.awakened) awake += 1;
+			const rb = rbOf(sb);
+			const p = rb?.translation();
+			const v = rb?.linvel();
+			if (p) {
+				if (p.y > maxY) {
+					maxY = p.y;
+					flying = sb.name;
+				}
+				if (p.y < -2) below += 1;
+			}
+			if (v) {
+				const s = Math.hypot(v.x, v.y, v.z);
+				if (s > maxSpeed) maxSpeed = s;
+				if (v.y > maxUpSpeed) maxUpSpeed = v.y;
+			}
+		}
+		return {
+			total: this.bodies.size,
+			awake,
+			destroyed,
+			debris: this.debrisAlive,
+			maxY: maxY === -Infinity ? 0 : maxY,
+			maxSpeed,
+			maxUpSpeed,
+			below,
+			highest: flying,
+			simTime: this.simTime
+		};
 	}
 };
 var sim = new Simulation();
@@ -998,15 +2180,16 @@ var useLab = create((set, get) => ({
 	helpOpen: false,
 	worldKey: 1,
 	explosion: {
-		power: 70,
-		radius: 16,
-		height: 2.4,
+		power: 20,
+		radius: Math.round(naturalRadius(20)),
+		height: 1.4,
 		x: 0,
 		z: 0
 	},
+	radiusAuto: true,
 	marker: {
 		x: 0,
-		y: 2.4,
+		y: 1.4,
 		z: 0
 	},
 	transformMode: "translate",
@@ -1076,10 +2259,32 @@ var useLab = create((set, get) => ({
 	setRightOpen: (v) => set({ rightOpen: v }),
 	setAiOpen: (v) => set({ aiOpen: v }),
 	setHelpOpen: (v) => set({ helpOpen: v }),
-	setExplosion: (p) => set({ explosion: {
-		...get().explosion,
-		...p
-	} }),
+	setExplosion: (p) => {
+		const prev = get().explosion;
+		const next = {
+			...prev,
+			...p
+		};
+		let radiusAuto = get().radiusAuto;
+		if (p.radius !== void 0 && p.radius !== prev.radius) radiusAuto = false;
+		else if (p.power !== void 0 && p.power !== prev.power && radiusAuto) next.radius = Math.round(naturalRadius(next.power) * 10) / 10;
+		set({
+			explosion: next,
+			radiusAuto
+		});
+	},
+	setRadiusAuto: (v) => {
+		if (v) {
+			const e = get().explosion;
+			set({
+				radiusAuto: true,
+				explosion: {
+					...e,
+					radius: Math.round(naturalRadius(e.power) * 10) / 10
+				}
+			});
+		} else set({ radiusAuto: false });
+	},
 	setMarker: (m) => set({ marker: m }),
 	setTransformMode: (m) => set({ transformMode: m }),
 	setChallenge: (id) => set({
@@ -1108,7 +2313,7 @@ var useLab = create((set, get) => ({
 		if (ch === "cadena" && chain >= 8) challengeStatus = "win";
 		if (ch === "puente" && sim.bridgeDown()) {
 			const last = get().replay.recording[get().replay.recording.length - 1];
-			challengeStatus = (typeof last?.payload.power === "number" ? last.payload.power : 99) <= 40 ? "win" : "fail";
+			challengeStatus = (typeof last?.payload.power === "number" ? last.payload.power : 99) <= 10 ? "win" : "fail";
 		}
 		if (ch === "puntuacion" && score >= 2500) challengeStatus = "win";
 		set({
@@ -1137,7 +2342,7 @@ var useLab = create((set, get) => ({
 			w: cat.w ?? 2,
 			h: cat.h ?? 2,
 			d: cat.d ?? 2,
-			mass: cat.mass ?? 80,
+			mass: cat.mass ?? 0,
 			material: cat.material ?? "hormigón",
 			resistance: cat.resistance ?? 50,
 			color: cat.color ?? "#8a8378",
@@ -1159,7 +2364,13 @@ var useLab = create((set, get) => ({
 		});
 	},
 	pushDebris: (items) => {
-		set({ debris: [...get().debris, ...items].slice(-90) });
+		set({ debris: [...get().debris, ...items].slice(-110) });
+	},
+	retireDebris: (ids) => {
+		if (!ids.length) return;
+		const drop = new Set(ids);
+		ids.forEach((id) => sim.unregister(id));
+		set({ debris: get().debris.filter((d) => !drop.has(d.id)) });
 	},
 	pushMeteor: (m) => set({ meteors: [...get().meteors, m] }),
 	removeMeteor: (id) => set({ meteors: get().meteors.filter((m) => m.id !== id) }),
@@ -1196,9 +2407,9 @@ var useLab = create((set, get) => ({
 			challengeStatus: get().challenge === "libre" ? "idle" : "progress",
 			lastMessage: "Simulación reiniciada.",
 			marker: {
-				x: 0,
+				x: get().explosion.x,
 				y: get().explosion.height,
-				z: 0
+				z: get().explosion.z
 			},
 			replay: get().replay.playing ? get().replay : {
 				available: get().replay.available,
@@ -1209,8 +2420,13 @@ var useLab = create((set, get) => ({
 		});
 	},
 	startReplay: () => {
-		const rec = get().replay.recording;
-		if (!rec.length) return;
+		const raw = get().replay.recording;
+		if (!raw.length) return;
+		const t0 = raw[0].t;
+		const rec = raw.map((a) => ({
+			...a,
+			t: a.t - t0 + .8
+		}));
 		set({
 			replay: {
 				available: true,
@@ -1261,6 +2477,7 @@ var useLab = create((set, get) => ({
 	}].slice(-12) }),
 	setAiBusy: (v) => set({ aiBusy: v })
 }));
+if (typeof window !== "undefined") window.__labStore = useLab;
 var ctx = null;
 function unlockAudio() {
 	if (typeof window === "undefined") return;
@@ -1276,7 +2493,9 @@ function noiseBuffer(duration) {
 	for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
 	return buffer;
 }
-function playBoom(power) {
+/** `charge` en kg equivalentes de TNT. La sonoridad crece con la raíz cúbica. */
+function playBoom(charge) {
+	const power = Math.min(160, Math.cbrt(Math.max(.05, charge)) * 22);
 	if (!ctx) return;
 	const t = ctx.currentTime;
 	const gain = ctx.createGain();
@@ -1412,7 +2631,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 var runExperiment = createServerFn({ method: "POST" }).validator((input) => ({ prompt: String(input?.prompt ?? "").slice(0, 500) })).handler(createSsrRpc("e44d30b97a798ed3ce10209ff61283265bb45682bdc89116105f630ab75f3e5f"));
-var Scene = (0, import_react.lazy)(() => import("./Scene-C9MZP33_.mjs"));
+var Scene = (0, import_react.lazy)(() => import("./Scene-DYNm2BxG.mjs"));
 function applyAction(a) {
 	const lab = useLab.getState();
 	switch (a.type) {
@@ -1525,9 +2744,20 @@ function applyAction(a) {
 		case "camera": if (a.mode) lab.setCameraMode(a.mode);
 	}
 }
-function detonateAt(x, z) {
+/** Masa legible: kilos hasta una tonelada, toneladas a partir de ahí. */
+function formatMass(kg) {
+	if (kg >= 1e3) return `${formatEs(Math.round(kg / 1e3 * 10) / 10)} t`;
+	return `${formatEs(Math.round(kg))} kg`;
+}
+/**
+* `y` sólo llega cuando se hace clic directamente sobre una pieza: en ese caso
+* la carga estalla justo donde se ha señalado, lo que permite atacar una planta
+* alta. Al hacer clic en el suelo se usa la altura del foco del panel.
+*/
+function detonateAt(x, z, y) {
 	const lab = useLab.getState();
-	const { power, radius, height } = lab.explosion;
+	const { power, radius } = lab.explosion;
+	const height = y ?? lab.explosion.height;
 	const px = x ?? lab.marker?.x ?? lab.explosion.x;
 	const pz = z ?? lab.marker?.z ?? lab.explosion.z;
 	lab.setMarker({
@@ -1552,7 +2782,7 @@ function detonateAt(x, z) {
 			height
 		}
 	});
-	lab.setMessage(`Explosión detonada · potencia ${formatEs(power)}`);
+	lab.setMessage(`Explosión detonada · carga ${formatEs(power)} kg TNT · radio ${formatEs(radius)} m`);
 }
 function LabApp() {
 	const started = useLab((s) => s.started);
@@ -1577,7 +2807,28 @@ function LabApp() {
 			earthquake: (intensity = .8) => applyAction({
 				type: "earthquake",
 				intensity
-			})
+			}),
+			probe: () => sim.probe(),
+			setCharge: (power, radius) => {
+				useLab.getState().setExplosion({ power });
+				if (radius !== void 0) useLab.getState().setExplosion({ radius });
+			},
+			explodeAt: (x, y, z, power, radius) => {
+				const r = radius ?? useLab.getState().explosion.radius;
+				sim.explode(x, y, z, power, r);
+				playBoom(power);
+			},
+			wind: (strength = .85) => applyAction({
+				type: "wind",
+				strength
+			}),
+			meteor: (x = 0, z = 0, power = 60) => applyAction({
+				type: "meteor",
+				x,
+				z,
+				power
+			}),
+			state: (id) => sim.liveState(id)
 		};
 		return () => {
 			window.__lab = void 0;
@@ -1680,7 +2931,7 @@ function StartScreen() {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-5 max-w-md text-xs leading-relaxed text-subtle",
-						children: "Clic en el suelo para detonar. Pausa con espacio. El panel izquierdo coloca estructuras y dispara eventos."
+						children: "Clic en el suelo o sobre cualquier pieza para detonar ahí mismo. Pausa con espacio. El panel izquierdo coloca estructuras y dispara eventos."
 					})
 				]
 			})
@@ -1892,14 +3143,57 @@ function CatalogPanel({ group }) {
 					children: item.name
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 					className: "mt-0.5 font-mono text-[10px] text-subtle",
-					children: [item.material ? materialLabel(item.material) : "Estructura", item.w ? ` · ${item.w}×${item.h}×${item.d}` : ""]
+					children: [
+						item.material ? materialLabel(item.material) : "Estructura",
+						item.w ? ` · ${item.w}×${item.h}×${item.d}` : "",
+						` · ${formatMass(catalogMass(item))}`
+					]
 				})]
 			}, item.id);
 		})]
 	});
 }
+/** Escala de referencia de cargas, para que la diferencia se note al momento. */
+var CHARGE_PRESETS = [
+	{
+		id: "muy-debil",
+		label: "Muy débil",
+		short: "0,5 kg",
+		kg: .5,
+		hint: "Apenas mueve objetos pequeños. Rompe cristales cerca del foco."
+	},
+	{
+		id: "debil",
+		label: "Débil",
+		short: "3 kg",
+		kg: 3,
+		hint: "Desplaza cajas y mobiliario. Abolla chapa. No toca la estructura."
+	},
+	{
+		id: "media",
+		label: "Media",
+		short: "20 kg",
+		kg: 20,
+		hint: "Destroza objetos y agrieta el hormigón a corta distancia."
+	},
+	{
+		id: "fuerte",
+		label: "Fuerte",
+		short: "120 kg",
+		kg: 120,
+		hint: "Vuelca vehículos y puede arruinar los apoyos de una planta."
+	},
+	{
+		id: "extrema",
+		label: "Extrema",
+		short: "500 kg",
+		kg: 500,
+		hint: "Arrasa la planta baja y provoca el colapso de todo el edificio."
+	}
+];
 function EventsPanel() {
 	const explosion = useLab((s) => s.explosion);
+	const radiusAuto = useLab((s) => s.radiusAuto);
 	const setExplosion = useLab((s) => s.setExplosion);
 	const setTool = useLab((s) => s.setTool);
 	const tool = useLab((s) => s.tool);
@@ -1914,27 +3208,58 @@ function EventsPanel() {
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mb-2 text-xs text-muted",
-						children: "Ajusta la carga y haz clic en el mundo para detonar."
+						children: "La carga se mide en kilogramos equivalentes de TNT. La distancia, la masa y el material deciden el resultado."
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mb-2 grid grid-cols-5 gap-1",
+						children: CHARGE_PRESETS.map((preset) => {
+							const active = Math.abs(explosion.power - preset.kg) < .01;
+							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								title: preset.hint,
+								onClick: () => {
+									setExplosion({ power: preset.kg });
+									playClick();
+								},
+								className: cn("flex min-h-11 flex-col items-center justify-center rounded-md border px-1 py-1 text-[10px] leading-tight", active ? "border-accent/60 bg-surface-3 text-fg" : "border-border bg-surface-2 text-muted hover:text-fg"),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: preset.label }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "font-mono text-[9px] text-subtle",
+									children: preset.short
+								})]
+							}, preset.id);
+						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Slider, {
-						label: "Potencia",
+						label: "Carga (kg TNT)",
 						value: explosion.power,
-						min: 10,
-						max: 160,
+						min: .25,
+						max: 500,
+						step: .25,
 						onChange: (v) => setExplosion({ power: v })
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Slider, {
-						label: "Radio de efecto",
+						label: `Radio de efecto (m)${radiusAuto ? " · automático" : ""}`,
 						value: explosion.radius,
-						min: 4,
-						max: 36,
+						min: 3,
+						max: 90,
+						step: .5,
 						onChange: (v) => setExplosion({ radius: v })
 					}),
+					!radiusAuto ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: () => useLab.getState().setRadiusAuto(true),
+						className: "mb-1 text-left text-[10px] text-accent hover:underline",
+						children: [
+							"Volver al radio automático (",
+							formatEs(sim.suggestedRadius(explosion.power)),
+							" m)"
+						]
+					}) : null,
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Slider, {
-						label: "Altura",
+						label: "Altura del foco (m)",
 						value: explosion.height,
 						min: 0,
-						max: 24,
+						max: 30,
 						step: .5,
 						onChange: (v) => setExplosion({ height: v })
 					}),
@@ -1991,7 +3316,7 @@ function EventsPanel() {
 						label: "Onda expansiva",
 						onClick: () => applyAction({
 							type: "shockwave",
-							power: 80,
+							power: 60,
 							x: 0,
 							z: 0
 						})
@@ -2181,7 +3506,7 @@ function RightPanel() {
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Row, {
 								k: "Masa",
-								v: `${formatEs(live.mass)} kg`
+								v: formatMass(live.mass)
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Row, {
 								k: "Tamaño",
@@ -2189,31 +3514,63 @@ function RightPanel() {
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Row, {
 								k: "Resistencia",
-								v: `${formatEs(live.resistance)} %`
+								v: `${formatEs(Math.round(live.strength))} kPa`
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Row, {
 								k: "Posición",
 								v: `${live.px.toFixed(1)}, ${live.py.toFixed(1)}, ${live.pz.toFixed(1)}`
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Row, {
-								k: "Estado estructural",
+								k: "Estado",
 								v: live.estado
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Row, {
+								k: "Soporte",
+								v: live.soporte ? "Apoyada" : "Suelta"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "h-1.5 overflow-hidden rounded-full bg-surface-3",
 								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "h-full bg-accent",
-									style: { width: `${Math.max(0, live.health / live.maxHealth * 100)}%` }
+									className: cn("h-full transition-[width] duration-200", live.integridad > .6 ? "bg-accent" : live.integridad > .3 ? "bg-warn" : "bg-danger"),
+									style: { width: `${Math.max(0, live.integridad * 100)}%` }
 								})
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 								className: "font-mono text-[10px] text-subtle",
 								children: [
 									"Integridad ",
-									formatEs(live.health / live.maxHealth * 100),
-									" %"
+									formatEs(Math.round(live.integridad * 100)),
+									" % ·",
+									" ",
+									integrityLabel(live.integridad)
 								]
 							}),
+							live.soporte && live.capacidad > 1 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1 h-1.5 overflow-hidden rounded-full bg-surface-3",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: cn("h-full", live.usoCapacidad > 100 ? "bg-danger" : "bg-subtle"),
+									style: { width: `${Math.min(100, live.usoCapacidad)}%` }
+								})
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "font-mono text-[10px] text-subtle",
+								children: [
+									"Carga que soporta ",
+									formatMass(live.cargaSoportada / 9.81),
+									" ·",
+									" ",
+									formatEs(Math.round(live.usoCapacidad)),
+									" % de su capacidad",
+									live.overloaded ? " · sobrecargada" : ""
+								]
+							})] }) : null,
+							!live.soporte && live.speed > .2 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "font-mono text-[10px] text-subtle",
+								children: [
+									"Velocidad ",
+									formatEs(Math.round(live.speed * 10) / 10),
+									" m/s"
+								]
+							}) : null,
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "mt-1 grid grid-cols-2 gap-1.5",
 								children: [
@@ -2587,4 +3944,4 @@ function MobileChrome() {
 var routes_exports = /* @__PURE__ */ __exportAll({ component: () => SplitComponent });
 var SplitComponent = LabApp;
 //#endregion
-export { useLab as a, BUILDINGS as c, LAMPS as d, VEHICLES as f, playBoom as i, CRATES as l, held as n, sim as o, setInjectedKeys as r, BARRIERS as s, routes_exports as t, FLOOR_H as u };
+export { useLab as a, BUILDINGS as c, LAMPS as d, VEHICLES as f, playBoom as i, CRATES as l, materialOf as m, held as n, sim as o, densityFor as p, setInjectedKeys as r, BARRIERS as s, routes_exports as t, FLOOR_H as u };
