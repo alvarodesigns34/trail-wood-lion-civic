@@ -181,8 +181,9 @@ export function FxLayer() {
   const tick = useRef(0);
   const [, setN] = useState(0);
 
+  // El tiempo de la simulación lo lleva el paso de física; aquí sólo forzamos
+  // el repintado de los efectos a 30 Hz.
   useFrame((_, dt) => {
-    sim.tickFx(dt);
     tick.current += dt;
     if (tick.current > 1 / 30) {
       tick.current = 0;
@@ -227,9 +228,19 @@ export function ToolGhost() {
       position={[hover.x, y, hover.z]}
       rotation={tool === "explode" ? [0, 0, 0] : [-Math.PI / 2, 0, 0]}
     >
-      {tool === "explode" ? <sphereGeometry args={[r, 20, 16]} /> : <circleGeometry args={[r, 32]} />}
+      {tool === "explode" ? (
+        <sphereGeometry args={[r, 20, 16]} />
+      ) : (
+        <circleGeometry args={[r, 32]} />
+      )}
       <meshBasicMaterial
-        color={tool === "meteor" ? "#ff6a2a" : tool === "place" || tool === "move" ? "#6ec8c0" : "#e8a070"}
+        color={
+          tool === "meteor"
+            ? "#ff6a2a"
+            : tool === "place" || tool === "move"
+              ? "#6ec8c0"
+              : "#e8a070"
+        }
         transparent
         opacity={0.14}
         depthWrite={false}

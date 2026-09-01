@@ -21,7 +21,9 @@ function noiseBuffer(duration: number) {
   return buffer;
 }
 
-export function playBoom(power: number) {
+/** `charge` en kg equivalentes de TNT. La sonoridad crece con la raíz cúbica. */
+export function playBoom(charge: number) {
+  const power = Math.min(160, Math.cbrt(Math.max(0.05, charge)) * 22);
   if (!ctx) return;
   const t = ctx.currentTime;
   const gain = ctx.createGain();

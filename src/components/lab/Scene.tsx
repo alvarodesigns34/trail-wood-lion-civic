@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { Physics, useBeforePhysicsStep, useRapier } from "@react-three/rapier";
+import { Physics, useAfterPhysicsStep, useBeforePhysicsStep, useRapier } from "@react-three/rapier";
 import * as THREE from "three";
 import { useLab } from "@/game/store";
 import { sim } from "@/game/sim";
@@ -42,13 +42,23 @@ function Sun() {
   return <directionalLight ref={ref} position={[36, 42, 18]} intensity={1.85} color="#ffd8b0" />;
 }
 
+/** Paso fijo de Rapier. Todo el tiempo de simulación se mide con él. */
+const FIXED_DT = 1 / 60;
+
 function TimeStepper() {
   const { step } = useRapier();
   const fpsAcc = useRef(0);
   const fpsFrames = useRef(0);
 
+  // La simulación avanza dentro del paso de física, nunca con el reloj de
+  // pantalla: así la pausa y la cámara lenta escalan el mundo entero de forma
+  // coherente (temporizadores de colapso incluidos).
   useBeforePhysicsStep(() => {
-    sim.applyWindAndRumble();
+    sim.stepSim(FIXED_DT);
+  });
+
+  useAfterPhysicsStep(() => {
+    sim.postStep(FIXED_DT);
   });
 
   useFrame((_, dt) => {
@@ -81,15 +91,19 @@ function TimeStepper() {
           w: r.w,
           h: r.h,
           d: r.d,
-          mass: 12,
+          mass: 0,
           material: r.material,
-          resistance: 8,
+          resistance: 14,
           color: r.color,
           vx: r.vx,
           vy: r.vy,
           vz: r.vz,
         })),
       );
+    }
+    if (sim.retireQueue.length) {
+      const ids = sim.retireQueue.splice(0, 24);
+      useLab.getState().retireDebris(ids);
     }
     if (sim.meteorQueue.length) {
       const m = sim.meteorQueue.shift();
@@ -116,7 +130,8 @@ function applyRecorded(type: string, payload: Record<string, number | string>) {
     playBoom(Number(payload.power));
   }
   if (type === "earthquake") sim.earthquake(Number(payload.intensity));
-  if (type === "meteor") sim.spawnMeteor(Number(payload.x), Number(payload.z), Number(payload.power));
+  if (type === "meteor")
+    sim.spawnMeteor(Number(payload.x), Number(payload.z), Number(payload.power));
   if (type === "wind") sim.startWind(Number(payload.strength));
   if (type === "collapse") {
     const t = String(payload.target);
@@ -180,7 +195,6 @@ function World() {
           size={[2.1, 0.9, 0.42]}
           color="#c9b48a"
           material="hormigón"
-          mass={46}
           resistance={40}
         />
       ))}
@@ -239,8 +253,9 @@ export default function Scene() {
         <Physics
           key={worldKey}
           paused={paused || timeScale !== 1}
-          timeStep={1 / 60}
+          timeStep={FIXED_DT}
           gravity={[0, -9.81, 0]}
+          numSolverIterations={quality === "alta" ? 8 : 5}
           interpolate
           colliders={false}
         >

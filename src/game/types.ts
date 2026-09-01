@@ -139,6 +139,12 @@ declare global {
       getScore: () => number;
       getBodyCount: () => number;
       earthquake: (intensity?: number) => void;
+      probe: () => Record<string, unknown>;
+      setCharge: (power: number, radius?: number) => void;
+      explodeAt: (x: number, y: number, z: number, power: number, radius?: number) => void;
+      wind: (strength?: number) => void;
+      meteor: (x?: number, z?: number, power?: number) => void;
+      state: (id: string) => Record<string, unknown> | null;
     };
   }
 }

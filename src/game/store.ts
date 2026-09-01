@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { catalogById } from "./city";
-import { sim } from "./sim";
+import { MAX_DEBRIS, sim } from "./sim";
+import { naturalRadius } from "./blast";
 import { uid } from "@/lib/utils";
 import type {
   CameraMode,
@@ -32,7 +33,13 @@ interface LabState {
   aiOpen: boolean;
   helpOpen: boolean;
   worldKey: number;
+  /**
+   * `power` es la carga en kilogramos equivalentes de TNT: una magnitud física
+   * real, no un número abstracto. `radius` es el radio de efecto en metros.
+   */
   explosion: { power: number; radius: number; height: number; x: number; z: number };
+  /** El radio sigue automáticamente a la carga mientras el usuario no lo toque. */
+  radiusAuto: boolean;
   marker: { x: number; y: number; z: number } | null;
   transformMode: TransformMode;
   score: number;
@@ -73,6 +80,7 @@ interface LabState {
   setAiOpen: (v: boolean) => void;
   setHelpOpen: (v: boolean) => void;
   setExplosion: (p: Partial<LabState["explosion"]>) => void;
+  setRadiusAuto: (v: boolean) => void;
   setMarker: (m: LabState["marker"]) => void;
   setTransformMode: (m: TransformMode) => void;
   setChallenge: (id: ChallengeId) => void;
@@ -82,10 +90,17 @@ interface LabState {
   setHoverGround: (p: LabState["hoverGround"]) => void;
   setShakeEnabled: (v: boolean) => void;
   setQuality: (q: "alta" | "media") => void;
-  addScore: (p: { damage: number; destroyed: number; chain: number; buildingId?: string; kind: string }) => void;
+  addScore: (p: {
+    damage: number;
+    destroyed: number;
+    chain: number;
+    buildingId?: string;
+    kind: string;
+  }) => void;
   spawnExtra: (item: SpawnItem) => void;
   spawnFromCatalog: (catalogId: string, x: number, y: number, z: number) => void;
   pushDebris: (items: SpawnItem[]) => void;
+  retireDebris: (ids: string[]) => void;
   pushMeteor: (m: { id: string; x: number; z: number; power: number }) => void;
   removeMeteor: (id: string) => void;
   removeExtra: (id: string) => void;
@@ -127,8 +142,9 @@ export const useLab = create<LabState>((set, get) => ({
   aiOpen: false,
   helpOpen: false,
   worldKey: 1,
-  explosion: { power: 70, radius: 16, height: 2.4, x: 0, z: 0 },
-  marker: { x: 0, y: 2.4, z: 0 },
+  explosion: { power: 20, radius: Math.round(naturalRadius(20)), height: 1.4, x: 0, z: 0 },
+  radiusAuto: true,
+  marker: { x: 0, y: 1.4, z: 0 },
   transformMode: "translate",
   score: 0,
   damage: 0,
@@ -170,7 +186,25 @@ export const useLab = create<LabState>((set, get) => ({
   setRightOpen: (v) => set({ rightOpen: v }),
   setAiOpen: (v) => set({ aiOpen: v }),
   setHelpOpen: (v) => set({ helpOpen: v }),
-  setExplosion: (p) => set({ explosion: { ...get().explosion, ...p } }),
+  setExplosion: (p) => {
+    const prev = get().explosion;
+    const next = { ...prev, ...p };
+    let radiusAuto = get().radiusAuto;
+    if (p.radius !== undefined && p.radius !== prev.radius) radiusAuto = false;
+    else if (p.power !== undefined && p.power !== prev.power && radiusAuto) {
+      next.radius = Math.round(naturalRadius(next.power) * 10) / 10;
+    }
+    set({ explosion: next, radiusAuto });
+  },
+  setRadiusAuto: (v: boolean) => {
+    if (v) {
+      const e = get().explosion;
+      set({
+        radiusAuto: true,
+        explosion: { ...e, radius: Math.round(naturalRadius(e.power) * 10) / 10 },
+      });
+    } else set({ radiusAuto: false });
+  },
   setMarker: (m) => set({ marker: m }),
   setTransformMode: (m) => set({ transformMode: m }),
   setChallenge: (id) =>
@@ -178,9 +212,7 @@ export const useLab = create<LabState>((set, get) => ({
       challenge: id,
       challengeStatus: id === "libre" ? "idle" : "progress",
       lastMessage:
-        id === "libre"
-          ? "Modo libre."
-          : "Reto activado. Observa el panel de puntuación.",
+        id === "libre" ? "Modo libre." : "Reto activado. Observa el panel de puntuación.",
     }),
   setFps: (n) => set({ fps: n }),
   setObjects: (n) => set({ objects: n }),
@@ -254,8 +286,14 @@ export const useLab = create<LabState>((set, get) => ({
   },
 
   pushDebris: (items) => {
-    const debris = [...get().debris, ...items].slice(-90);
+    const debris = [...get().debris, ...items].slice(-MAX_DEBRIS);
     set({ debris });
+  },
+  retireDebris: (ids) => {
+    if (!ids.length) return;
+    const drop = new Set(ids);
+    ids.forEach((id) => sim.unregister(id));
+    set({ debris: get().debris.filter((d) => !drop.has(d.id)) });
   },
   pushMeteor: (m) => set({ meteors: [...get().meteors, m] }),
   removeMeteor: (id) => set({ meteors: get().meteors.filter((m) => m.id !== id) }),
@@ -295,7 +333,7 @@ export const useLab = create<LabState>((set, get) => ({
       paused: false,
       challengeStatus: get().challenge === "libre" ? "idle" : "progress",
       lastMessage: "Simulación reiniciada.",
-      marker: { x: 0, y: get().explosion.height, z: 0 },
+      marker: { x: get().explosion.x, y: get().explosion.height, z: get().explosion.z },
       replay: get().replay.playing
         ? get().replay
         : { available: get().replay.available, recording: [], playing: false, cursor: 0 },
@@ -344,3 +382,8 @@ export const useLab = create<LabState>((set, get) => ({
   pushAi: (role, text) => set({ aiLog: [...get().aiLog, { role, text }].slice(-12) }),
   setAiBusy: (v) => set({ aiBusy: v }),
 }));
+
+// Acceso al estado desde las pruebas automatizadas del navegador.
+if (typeof window !== "undefined") {
+  (window as unknown as { __labStore?: typeof useLab }).__labStore = useLab;
+}

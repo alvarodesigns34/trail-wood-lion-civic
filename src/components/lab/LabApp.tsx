@@ -135,7 +135,9 @@ function detonateAt(x?: number, z?: number) {
     type: "explosion",
     payload: { x: px, z: pz, power, radius, height },
   });
-  lab.setMessage(`Explosión detonada · potencia ${formatEs(power)}`);
+  lab.setMessage(
+    `Explosión detonada · carga ${formatEs(power)} kg TNT · radio ${formatEs(radius)} m`,
+  );
 }
 
 export default function LabApp() {
@@ -162,6 +164,19 @@ export default function LabApp() {
       getScore: () => useLab.getState().score,
       getBodyCount: () => sim.bodies.size,
       earthquake: (intensity = 0.8) => applyAction({ type: "earthquake", intensity }),
+      probe: () => sim.probe(),
+      setCharge: (power: number, radius?: number) => {
+        useLab.getState().setExplosion({ power });
+        if (radius !== undefined) useLab.getState().setExplosion({ radius });
+      },
+      explodeAt: (x: number, y: number, z: number, power: number, radius?: number) => {
+        const r = radius ?? useLab.getState().explosion.radius;
+        sim.explode(x, y, z, power, r);
+        playBoom(power);
+      },
+      wind: (strength = 0.85) => applyAction({ type: "wind", strength }),
+      meteor: (x = 0, z = 0, power = 60) => applyAction({ type: "meteor", x, z, power }),
+      state: (id: string) => sim.liveState(id),
     };
     return () => {
       window.__lab = undefined;
@@ -246,7 +261,9 @@ function StartScreen() {
         }}
       />
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <p className="font-mono text-[11px] tracking-[0.42em] text-accent">SIMULACIÓN ESTRUCTURAL</p>
+        <p className="font-mono text-[11px] tracking-[0.42em] text-accent">
+          SIMULACIÓN ESTRUCTURAL
+        </p>
         <h1 className="mt-4 font-sans text-5xl font-semibold tracking-[-0.04em] text-fg md:text-7xl">
           DESTRUCT LAB
         </h1>
@@ -458,7 +475,9 @@ function CatalogPanel({ group }: { group: Exclude<LeftTab, "eventos"> }) {
             }}
             className={cn(
               "flex flex-col items-start rounded-md border px-3 py-2.5 text-left",
-              active ? "border-accent/50 bg-surface-3" : "border-border bg-surface-2 hover:border-subtle",
+              active
+                ? "border-accent/50 bg-surface-3"
+                : "border-border bg-surface-2 hover:border-subtle",
             )}
           >
             <span className="text-sm text-fg">{item.name}</span>
@@ -473,8 +492,48 @@ function CatalogPanel({ group }: { group: Exclude<LeftTab, "eventos"> }) {
   );
 }
 
+/** Escala de referencia de cargas, para que la diferencia se note al momento. */
+const CHARGE_PRESETS = [
+  {
+    id: "muy-debil",
+    label: "Muy débil",
+    short: "0,5 kg",
+    kg: 0.5,
+    hint: "Apenas mueve objetos pequeños. Rompe cristales cerca del foco.",
+  },
+  {
+    id: "debil",
+    label: "Débil",
+    short: "3 kg",
+    kg: 3,
+    hint: "Desplaza cajas y mobiliario. Abolla chapa. No toca la estructura.",
+  },
+  {
+    id: "media",
+    label: "Media",
+    short: "20 kg",
+    kg: 20,
+    hint: "Destroza objetos y agrieta el hormigón a corta distancia.",
+  },
+  {
+    id: "fuerte",
+    label: "Fuerte",
+    short: "120 kg",
+    kg: 120,
+    hint: "Vuelca vehículos y puede arruinar los apoyos de una planta.",
+  },
+  {
+    id: "extrema",
+    label: "Extrema",
+    short: "500 kg",
+    kg: 500,
+    hint: "Arrasa la planta baja y provoca el colapso de todo el edificio.",
+  },
+] as const;
+
 function EventsPanel() {
   const explosion = useLab((s) => s.explosion);
+  const radiusAuto = useLab((s) => s.radiusAuto);
   const setExplosion = useLab((s) => s.setExplosion);
   const setTool = useLab((s) => s.setTool);
   const tool = useLab((s) => s.tool);
@@ -486,27 +545,64 @@ function EventsPanel() {
     <div className="flex flex-col gap-4">
       <Section title="Explosión">
         <p className="mb-2 text-xs text-muted">
-          Ajusta la carga y haz clic en el mundo para detonar.
+          La carga se mide en kilogramos equivalentes de TNT. La distancia, la masa y el material
+          deciden el resultado.
         </p>
+        <div className="mb-2 grid grid-cols-5 gap-1">
+          {CHARGE_PRESETS.map((preset) => {
+            const active = Math.abs(explosion.power - preset.kg) < 0.01;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                title={preset.hint}
+                onClick={() => {
+                  setExplosion({ power: preset.kg });
+                  playClick();
+                }}
+                className={cn(
+                  "flex min-h-11 flex-col items-center justify-center rounded-md border px-1 py-1 text-[10px] leading-tight",
+                  active
+                    ? "border-accent/60 bg-surface-3 text-fg"
+                    : "border-border bg-surface-2 text-muted hover:text-fg",
+                )}
+              >
+                <span>{preset.label}</span>
+                <span className="font-mono text-[9px] text-subtle">{preset.short}</span>
+              </button>
+            );
+          })}
+        </div>
         <Slider
-          label="Potencia"
+          label="Carga (kg TNT)"
           value={explosion.power}
-          min={10}
-          max={160}
+          min={0.25}
+          max={500}
+          step={0.25}
           onChange={(v) => setExplosion({ power: v })}
         />
         <Slider
-          label="Radio de efecto"
+          label={`Radio de efecto (m)${radiusAuto ? " · automático" : ""}`}
           value={explosion.radius}
-          min={4}
-          max={36}
+          min={3}
+          max={90}
+          step={0.5}
           onChange={(v) => setExplosion({ radius: v })}
         />
+        {!radiusAuto ? (
+          <button
+            type="button"
+            onClick={() => useLab.getState().setRadiusAuto(true)}
+            className="mb-1 text-left text-[10px] text-accent hover:underline"
+          >
+            Volver al radio automático ({formatEs(sim.suggestedRadius(explosion.power))} m)
+          </button>
+        ) : null}
         <Slider
-          label="Altura"
+          label="Altura del foco (m)"
           value={explosion.height}
           min={0}
-          max={24}
+          max={30}
           step={0.5}
           onChange={(v) => setExplosion({ height: v })}
         />
@@ -562,7 +658,7 @@ function EventsPanel() {
         <EventBtn
           icon={<Wind className="size-4" />}
           label="Onda expansiva"
-          onClick={() => applyAction({ type: "shockwave", power: 80, x: 0, z: 0 })}
+          onClick={() => applyAction({ type: "shockwave", power: 60, x: 0, z: 0 })}
         />
         <EventBtn
           icon={<Building2 className="size-4" />}
@@ -1009,7 +1105,9 @@ function AiDrawer() {
       <div className="flex max-h-[min(640px,86dvh)] w-full max-w-lg flex-col rounded-xl border border-border bg-surface">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
-            <p className="font-mono text-[10px] tracking-[0.22em] text-accent">EXPERIMENTO CON IA</p>
+            <p className="font-mono text-[10px] tracking-[0.22em] text-accent">
+              EXPERIMENTO CON IA
+            </p>
             <p className="text-sm text-muted">Describe el ensayo en español</p>
           </div>
           <button
@@ -1021,7 +1119,10 @@ function AiDrawer() {
             <X className="size-4" />
           </button>
         </div>
-        <div ref={listRef} className="lab-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+        <div
+          ref={listRef}
+          className="lab-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3"
+        >
           {log.length === 0 && (
             <p className="text-sm leading-relaxed text-muted">
               Ejemplo: «Construye un puente de 200 metros y provoca un terremoto fuerte.»
@@ -1112,7 +1213,9 @@ function HelpOverlay() {
             onClick={() => useLab.getState().setQuality(quality === "alta" ? "media" : "alta")}
           >
             <span>Calidad gráfica</span>
-            <span className="font-mono text-xs text-accent">{quality === "alta" ? "Alta" : "Media"}</span>
+            <span className="font-mono text-xs text-accent">
+              {quality === "alta" ? "Alta" : "Media"}
+            </span>
           </button>
         </div>
       </div>

@@ -74,7 +74,7 @@ export function parseCommand(prompt: string): AiResult {
       type: "meteor",
       x: /central|centro/.test(p) ? 22 : /azul/.test(p) ? 22 : 0,
       z: /central|centro/.test(p) ? 2 : /azul/.test(p) ? -16 : 0,
-      power: 40 + s * 80,
+      power: 1.5 + s * s * 220,
     });
   }
 
@@ -87,7 +87,7 @@ export function parseCommand(prompt: string): AiResult {
   }
 
   if (/onda expansiva|onda de choque/.test(p)) {
-    actions.push({ type: "shockwave", power: 50 + strength(p, 0.6) * 80, x: 0, z: 0 });
+    actions.push({ type: "shockwave", power: 2 + strength(p, 0.6) ** 2 * 160, x: 0, z: 0 });
   }
 
   if (/colapso|derrumbe|derrumba/.test(p)) {
@@ -117,8 +117,7 @@ export function parseCommand(prompt: string): AiResult {
     }
     actions.push({
       type: "explosion",
-      power: 40 + s * 90,
-      radius: 12 + s * 14,
+      power: 1.5 + s * s * 240,
       height: 2.5,
       x,
       z,

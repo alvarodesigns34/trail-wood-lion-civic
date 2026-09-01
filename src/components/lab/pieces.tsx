@@ -8,7 +8,14 @@ import type { BodyKind, SpawnItem } from "@/game/types";
 import { FLOOR_H } from "@/game/city";
 import type { Object3D } from "three";
 import { playBoom } from "@/game/audio";
-import { asphaltTexture, facadeTexture, riverTexture, shadeHex, sidewalkTexture } from "@/game/textures";
+import {
+  asphaltTexture,
+  facadeTexture,
+  riverTexture,
+  shadeHex,
+  sidewalkTexture,
+} from "@/game/textures";
+import { densityFor, materialOf } from "@/game/materials";
 
 interface PieceProps {
   id: string;
@@ -18,7 +25,10 @@ interface PieceProps {
   size: [number, number, number];
   color: string;
   material: string;
-  mass: number;
+  /** Masa explícita en kg. Si no se da, se deduce de geometría y material. */
+  mass?: number;
+  /** Fracción de la caja realmente maciza (tubos, celosías, cajas vacías). */
+  hollow?: number;
   resistance: number;
   buildingId?: string;
   floorIndex?: number;
@@ -41,6 +51,7 @@ export function Piece({
   color,
   material,
   mass,
+  hollow,
   resistance,
   buildingId,
   floorIndex,
@@ -60,6 +71,12 @@ export function Piece({
   const [w, h, d] = size;
   const selected = useLab((s) => s.selectedId === id);
 
+  const density = useMemo(
+    () => (mass ? mass / Math.max(1e-4, w * h * d) : densityFor(kind, material, hollow)),
+    [mass, kind, material, hollow, w, h, d],
+  );
+  const phys = useMemo(() => materialOf(material), [material]);
+
   useEffect(() => {
     sim.register({
       id,
@@ -69,15 +86,25 @@ export function Piece({
       floorIndex,
       material,
       mass,
+      hollow,
       resistance,
       size: [w, h, d],
       color,
+      position,
     });
     return () => sim.unregister(id);
-  }, [id, kind, name, buildingId, floorIndex, material, mass, resistance, w, h, d, color]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, kind, name, buildingId, floorIndex, material, mass, hollow, resistance, w, h, d, color]);
 
   useEffect(() => {
-    sim.attach(id, ref.current, obj.current, () => setDynamic(true), () => setGone(true));
+    sim.attach(
+      id,
+      ref.current,
+      obj.current,
+      () => setDynamic(true),
+      () => setGone(true),
+    );
+    return () => sim.detach(id);
   }, [id, dynamic]);
 
   useEffect(() => {
@@ -89,8 +116,10 @@ export function Piece({
   const mat = useMemo(
     () => ({
       color,
-      roughness: roughness ?? (glass ? 0.18 : material === "acero" || material === "metal" ? 0.32 : 0.88),
-      metalness: metalness ?? (glass ? 0.72 : material === "acero" || material === "metal" ? 0.78 : 0.06),
+      roughness:
+        roughness ?? (glass ? 0.18 : material === "acero" || material === "metal" ? 0.32 : 0.88),
+      metalness:
+        metalness ?? (glass ? 0.72 : material === "acero" || material === "metal" ? 0.78 : 0.06),
     }),
     [color, roughness, metalness, glass, material],
   );
@@ -100,7 +129,8 @@ export function Piece({
     const tool = useLab.getState().tool;
     if (tool === "select" || tool === "move") {
       useLab.getState().select(id);
-      if (tool === "move") useLab.getState().setMessage("Seleccionado. Clic en el suelo para mover.");
+      if (tool === "move")
+        useLab.getState().setMessage("Seleccionado. Clic en el suelo para mover.");
     }
   };
 
@@ -114,17 +144,19 @@ export function Piece({
       position={position}
       rotation={rotation}
       colliders={false}
-      mass={mass}
-      friction={0.92}
-      restitution={0.06}
-      linearDamping={0.18}
-      angularDamping={0.22}
+      linearDamping={0.04}
+      angularDamping={0.28}
       ccd={kind === "meteor" || kind === "debris"}
       canSleep
       {...(linearVelocity ? { linearVelocity } : {})}
       {...(onImpact ? { onCollisionEnter: onImpact } : {})}
     >
-      <CuboidCollider args={[w / 2, h / 2, d / 2]} friction={0.92} restitution={0.05} />
+      <CuboidCollider
+        args={[w / 2, h / 2, d / 2]}
+        density={density}
+        friction={phys.friction}
+        restitution={phys.restitution}
+      />
       <group ref={obj}>
         {kind === "floor" ? (
           <FloorVisual
@@ -245,7 +277,7 @@ export function BuildingStack({
   resistance: number;
   glass?: boolean;
 }) {
-  const h = FLOOR_H * 0.92;
+  const h = FLOOR_H * 0.97;
   const pieces = [];
   for (let i = 0; i < floors; i++) {
     const y = i * FLOOR_H + h / 2;
@@ -262,7 +294,6 @@ export function BuildingStack({
         size={[w, h, d]}
         color={shadeHex(color, shade)}
         material={material}
-        mass={180 + w * d * 2.4}
         resistance={resistance}
         glass={glass}
         roofDetail={i === floors - 1}
@@ -287,12 +318,13 @@ export function VehicleBody({
   rotY: number;
   color: string;
 }) {
+  // Masas reales: un camión pesa seis veces lo que un coche y se nota.
   const dim =
     kind === "truck"
-      ? { w: 2.5, h: 2.5, d: 7.2, mass: 260 }
+      ? { w: 2.5, h: 2.5, d: 7.2, mass: 8600 }
       : kind === "van"
-        ? { w: 2.1, h: 2.1, d: 5.1, mass: 140 }
-        : { w: 1.9, h: 1.35, d: 4.2, mass: 90 };
+        ? { w: 2.1, h: 2.1, d: 5.1, mass: 2600 }
+        : { w: 1.9, h: 1.35, d: 4.2, mass: 1400 };
   const name = kind === "truck" ? "Camión" : kind === "van" ? "Furgoneta" : "Coche";
   const ref = useRef<RapierRigidBody>(null);
   const obj = useRef<Object3D>(null);
@@ -310,12 +342,20 @@ export function VehicleBody({
       resistance: 36,
       size: [dim.w, dim.h, dim.d],
       color,
+      position: [x, dim.h / 2 + 0.02, z],
     });
     return () => sim.unregister(id);
-  }, [id, name, dim.mass, dim.w, dim.h, dim.d, color]);
+  }, [id, name, dim.mass, dim.w, dim.h, dim.d, color, x, z]);
 
   useEffect(() => {
-    sim.attach(id, ref.current, obj.current, () => setDynamic(true), () => setGone(true));
+    sim.attach(
+      id,
+      ref.current,
+      obj.current,
+      () => setDynamic(true),
+      () => setGone(true),
+    );
+    return () => sim.detach(id);
   }, [id, dynamic]);
 
   useEffect(() => {
@@ -344,14 +384,16 @@ export function VehicleBody({
       position={[x, dim.h / 2 + 0.02, z]}
       rotation={[0, rotY, 0]}
       colliders={false}
-      mass={dim.mass}
-      friction={0.92}
-      restitution={0.06}
-      linearDamping={0.18}
-      angularDamping={0.22}
+      linearDamping={0.05}
+      angularDamping={0.3}
       canSleep
     >
-      <CuboidCollider args={[dim.w / 2, dim.h / 2, dim.d / 2]} friction={0.92} restitution={0.05} />
+      <CuboidCollider
+        args={[dim.w / 2, dim.h / 2, dim.d / 2]}
+        density={dim.mass / (dim.w * dim.h * dim.d)}
+        friction={0.72}
+        restitution={0.1}
+      />
       <group ref={obj} onClick={onClick}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[dim.w, dim.h * 0.55, dim.d]} />
@@ -398,16 +440,24 @@ export function LampPost({ id, x, z }: { id: string; x: number; z: number }) {
       kind: "prop",
       name: "Farola",
       material: "acero",
-      mass: 26,
+      hollow: 0.18,
       resistance: 20,
       size: [0.28, 5.5, 0.28],
       color: "#3a3e44",
+      position: [x, 2.75, z],
     });
     return () => sim.unregister(id);
-  }, [id]);
+  }, [id, x, z]);
 
   useEffect(() => {
-    sim.attach(id, ref.current, obj.current, () => setDynamic(true), () => setGone(true));
+    sim.attach(
+      id,
+      ref.current,
+      obj.current,
+      () => setDynamic(true),
+      () => setGone(true),
+    );
+    return () => sim.detach(id);
   }, [id, dynamic]);
 
   useEffect(() => {
@@ -431,12 +481,16 @@ export function LampPost({ id, x, z }: { id: string; x: number; z: number }) {
       type={dynamic ? "dynamic" : "fixed"}
       position={[x, 2.75, z]}
       colliders={false}
-      mass={26}
-      friction={0.9}
-      restitution={0.05}
+      linearDamping={0.04}
+      angularDamping={0.25}
       canSleep
     >
-      <CuboidCollider args={[0.14, 2.75, 0.14]} />
+      <CuboidCollider
+        args={[0.14, 2.75, 0.14]}
+        density={densityFor("prop", "acero", 0.18)}
+        friction={0.55}
+        restitution={0.16}
+      />
       <group ref={obj} onClick={onClick}>
         <mesh castShadow>
           <boxGeometry args={[0.28, 5.5, 0.28]} />
@@ -457,7 +511,17 @@ export function LampPost({ id, x, z }: { id: string; x: number; z: number }) {
   );
 }
 
-export function CrateStack({ id, x, z, count }: { id: string; x: number; z: number; count: number }) {
+export function CrateStack({
+  id,
+  x,
+  z,
+  count,
+}: {
+  id: string;
+  x: number;
+  z: number;
+  count: number;
+}) {
   const s = 1.15;
   return (
     <group>
@@ -471,7 +535,7 @@ export function CrateStack({ id, x, z, count }: { id: string; x: number; z: numb
           size={[s, s, s]}
           color={i % 2 ? "#8a6a3c" : "#6e5530"}
           material="madera"
-          mass={28}
+          hollow={0.32}
           resistance={22}
         />
       ))}
@@ -498,7 +562,6 @@ export function Bridge() {
         size={[segW - 0.05, 0.55, 5.6]}
         color="#7c7a74"
         material="hormigón"
-        mass={280}
         resistance={72}
       />,
     );
@@ -526,7 +589,6 @@ export function Bridge() {
           size={[1.1, 1.1, 1.1]}
           color="#5c5a54"
           material="hormigón"
-          mass={400}
           resistance={88}
         />
       ))}
@@ -694,7 +756,7 @@ export function ExtraItem({ item }: { item: SpawnItem }) {
             size={[0.7 - i * 0.06, 2.6, 0.7 - i * 0.06]}
             color={item.color}
             material="acero"
-            mass={40}
+            hollow={0.12}
             resistance={38}
           />
         ))}
@@ -759,10 +821,9 @@ export function DebrisPiece({ item }: { item: SpawnItem }) {
       size={[item.w, item.h, item.d]}
       color={item.color}
       material={item.material}
-      mass={Math.max(8, item.mass)}
-      resistance={10}
+      resistance={14}
       initialDynamic
-      linearVelocity={[item.vx ?? 0, item.vy ?? 2, item.vz ?? 0]}
+      linearVelocity={[item.vx ?? 0, item.vy ?? 0, item.vz ?? 0]}
     />
   );
 }
@@ -784,11 +845,8 @@ export function MeteorBody({
       type="dynamic"
       position={[x, 48, z]}
       colliders={false}
-      mass={1800}
       ccd
-      linearVelocity={[0, -38, 0]}
-      friction={0.4}
-      restitution={0.05}
+      linearVelocity={[0, -34, 0]}
       onCollisionEnter={(payload) => {
         if (hit.current) return;
         hit.current = true;
@@ -802,7 +860,7 @@ export function MeteorBody({
         useLab.getState().removeMeteor(id);
       }}
     >
-      <CuboidCollider args={[1.4, 1.4, 1.4]} />
+      <CuboidCollider args={[1.4, 1.4, 1.4]} density={2700} friction={0.8} restitution={0.05} />
       <mesh castShadow>
         <icosahedronGeometry args={[1.6, 0]} />
         <meshStandardMaterial
