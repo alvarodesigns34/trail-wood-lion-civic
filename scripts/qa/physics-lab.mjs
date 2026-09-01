@@ -266,7 +266,71 @@ const fps = await page.evaluate(async () => {
 console.log(`  ${fps} fps con la escena destruida (Chromium por software)`);
 
 /* --------------------------------------------------------------- */
-console.log("\n— 10. Reinicio —");
+console.log("\n— 10. Cámara lenta y velocidad de simulación —");
+const rate = async (scale) => {
+  await page.evaluate((v) => window.__labStore.getState().setTimeScale(v), scale);
+  const t0 = await page.evaluate(() => window.__lab.probe().simTime);
+  await settle(3);
+  const t1 = await page.evaluate(() => window.__lab.probe().simTime);
+  return (t1 - t0) / 3;
+};
+await reset();
+const r1 = await rate(1);
+const rSlow = await rate(0.25);
+const rFast = await rate(2);
+await page.evaluate(() => window.__labStore.getState().setTimeScale(1));
+console.log(
+  `  1× → ${r1.toFixed(2)} s/s · 0,25× → ${rSlow.toFixed(2)} s/s · 2× → ${rFast.toFixed(2)} s/s`,
+);
+check(
+  "La cámara lenta ralentiza de verdad el tiempo de simulación",
+  rSlow < r1 * 0.55 && rSlow > 0.05,
+  `${rSlow.toFixed(2)} frente a ${r1.toFixed(2)}`,
+);
+check(
+  "La velocidad ×2 acelera el tiempo de simulación respecto a la cámara lenta",
+  rFast > rSlow * 3,
+  `×2 ${rFast.toFixed(2)} s/s frente a ×0,25 ${rSlow.toFixed(2)} s/s`,
+);
+
+console.log("\n— 11. Pausa —");
+await page.evaluate(() => window.__lab.pause());
+const tp0 = await page.evaluate(() => window.__lab.probe().simTime);
+await settle(2);
+const tp1 = await page.evaluate(() => window.__lab.probe().simTime);
+await page.evaluate(() => window.__lab.play());
+check(
+  "En pausa el tiempo de simulación no avanza",
+  Math.abs(tp1 - tp0) < 0.02,
+  `Δ ${(tp1 - tp0).toFixed(3)} s`,
+);
+
+console.log("\n— 12. Repetición —");
+await reset();
+await page.evaluate(() => window.__labStore.getState().setExplosion({ power: 120 }));
+await page.evaluate(() => window.__lab.detonate(18.5, 2));
+await settle(5);
+const firstRun = await probe();
+const recorded = await page.evaluate(() => window.__labStore.getState().replay.recording.length);
+await page.evaluate(() => window.__labStore.getState().startReplay());
+await settle(16);
+const replayRun = await probe();
+const cursor = await page.evaluate(() => window.__labStore.getState().replay.cursor);
+await page.evaluate(() => {
+  window.__labStore.getState().stopReplay();
+  window.__labStore.getState().setTimeScale(1);
+});
+console.log(
+  `  acciones grabadas ${recorded} · original ${firstRun.destroyed} destruidos · repetición ${replayRun.destroyed}`,
+);
+check(
+  "La repetición vuelve a reproducir los acontecimientos grabados",
+  recorded > 0 && cursor >= recorded && replayRun.destroyed > firstRun.destroyed * 0.4,
+  `cursor ${cursor}/${recorded} · ${replayRun.destroyed} destruidos frente a ${firstRun.destroyed}`,
+);
+
+/* --------------------------------------------------------------- */
+console.log("\n— 13. Reinicio —");
 await reset();
 const after = await probe();
 check(
@@ -274,7 +338,7 @@ check(
   after.awake === 0 && after.destroyed === 0 && after.total >= base.total - 2,
   `${after.total} cuerpos, ${after.awake} sueltos`,
 );
-await shot("10-reinicio");
+await shot("13-reinicio");
 
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} comprobaciones correctas`);

@@ -341,8 +341,14 @@ export const useLab = create<LabState>((set, get) => ({
   },
 
   startReplay: () => {
-    const rec = get().replay.recording;
-    if (!rec.length) return;
+    const raw = get().replay.recording;
+    if (!raw.length) return;
+    // Las marcas de tiempo se reajustan para que el primer acontecimiento se
+    // dispare a los 0,8 s del reinicio en lugar de esperar el tiempo absoluto
+    // de la sesión: repetir algo ocurrido en el minuto tres no debe obligar a
+    // esperar tres minutos. Los intervalos entre acontecimientos se conservan.
+    const t0 = raw[0].t;
+    const rec = raw.map((a) => ({ ...a, t: a.t - t0 + 0.8 }));
     set({
       replay: { available: true, recording: rec, playing: true, cursor: 0 },
       timeScale: 0.5,

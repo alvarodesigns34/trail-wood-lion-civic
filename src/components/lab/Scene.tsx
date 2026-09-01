@@ -82,7 +82,10 @@ function TimeStepper() {
     }
 
     if (!st.paused && st.timeScale !== 1) {
-      step(Math.min(d * st.timeScale, 0.2));
+      // Mismo recorte que usa Rapier en su bucle interno (0,25 s) para que el
+      // ritmo con escala de tiempo coincida con el ritmo a 1×; el tope de 0,35 s
+      // limita a 21 subpasos por fotograma y evita picos en máquinas lentas.
+      step(Math.min(Math.min(dt, 0.25) * st.timeScale, 0.35));
     }
 
     if (sim.debrisQueue.length) {
