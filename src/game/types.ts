@@ -3,27 +3,14 @@ export type Tool = "select" | "place" | "explode" | "meteor" | "move";
 export type CameraMode = "orbit" | "free" | "cinematic" | "follow" | "fps";
 
 export type LeftTab =
-  | "construccion"
-  | "estructuras"
-  | "vehiculos"
-  | "objetos"
-  | "terreno"
-  | "eventos";
+  "construccion" | "estructuras" | "vehiculos" | "objetos" | "terreno" | "eventos";
 
 export type ChallengeId = "libre" | "precision" | "cadena" | "puntuacion" | "puente";
 
 export type ChallengeStatus = "idle" | "progress" | "win" | "fail";
 
 export type BodyKind =
-  | "floor"
-  | "column"
-  | "vehicle"
-  | "prop"
-  | "bridge"
-  | "debris"
-  | "meteor"
-  | "terrain"
-  | "core";
+  "floor" | "column" | "vehicle" | "prop" | "bridge" | "debris" | "meteor" | "terrain" | "core";
 
 export type TransformMode = "translate" | "rotate";
 
@@ -79,14 +66,7 @@ export interface SpawnItem {
 
 export interface RecordedAction {
   t: number;
-  type:
-    | "explosion"
-    | "earthquake"
-    | "meteor"
-    | "wind"
-    | "collapse"
-    | "shockwave"
-    | "spawn";
+  type: "explosion" | "earthquake" | "meteor" | "wind" | "collapse" | "shockwave" | "spawn";
   payload: Record<string, number | string>;
 }
 
@@ -132,7 +112,7 @@ declare global {
       setSteer?: (v: number) => void;
     };
     __lab?: {
-      detonate: (x?: number, z?: number) => void;
+      detonate: (x?: number, z?: number, y?: number) => void;
       pause: () => void;
       play: () => void;
       reset: () => void;

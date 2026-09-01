@@ -4,6 +4,7 @@ import type { BodyKind } from "./types";
 import {
   blastField,
   closestPointOnBox,
+  destructiveRadius,
   distanceToBox,
   naturalRadius,
   projectedArea,
@@ -581,11 +582,17 @@ class Simulation {
       tmpDir.y = dy / len;
       tmpDir.z = dz / len;
 
-      // 1. Daño por sobrepresión.
+      // 1. Daño por sobrepresión, acotado por el volumen que la carga alcanza
+      // realmente a arruinar: media docena de kilos pegados a un forjado abren
+      // un boquete, no se llevan la planta entera. Sin este límite cualquier
+      // carga en contacto destruía la pieza completa por grande que fuese, y
+      // una carga mínima bien colocada bastaba para tirar un edificio.
       let applied = 0;
       if (overpressure > sb.strength) {
         const frac = Math.min(1, Math.pow((overpressure - sb.strength) / (sb.strength * 3.2), 0.8));
-        applied = this.damage(sb, frac, tmpDir);
+        const rd = destructiveRadius(w, sb.strength);
+        const coverage = Math.min(1, ((4 / 3) * Math.PI * rd * rd * rd) / sb.volume);
+        applied = this.damage(sb, frac * coverage, tmpDir);
         damageAcc += applied * 100;
       }
 

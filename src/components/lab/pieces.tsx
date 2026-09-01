@@ -126,6 +126,7 @@ export function Piece({
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
+    if (handleEventClick(e.point)) return;
     const tool = useLab.getState().tool;
     if (tool === "select" || tool === "move") {
       useLab.getState().select(id);
@@ -370,6 +371,7 @@ export function VehicleBody({
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
+    if (handleEventClick(e.point)) return;
     const tool = useLab.getState().tool;
     if (tool === "select" || tool === "move") useLab.getState().select(id);
   };
@@ -472,6 +474,7 @@ export function LampPost({ id, x, z }: { id: string; x: number; z: number }) {
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
+    if (handleEventClick(e.point)) return;
     const tool = useLab.getState().tool;
     if (tool === "select" || tool === "move") useLab.getState().select(id);
   };
@@ -602,6 +605,33 @@ export function Bridge() {
       </mesh>
     </group>
   );
+}
+
+/**
+ * Clic sobre una pieza con una herramienta de evento activa. Antes sólo el
+ * suelo detonaba: si se apuntaba a un edificio no pasaba nada, que es
+ * justamente lo contrario de lo que se espera al querer atacar una planta
+ * concreta. Devuelve true si ha consumido el clic.
+ */
+function handleEventClick(p: THREE.Vector3) {
+  const { tool } = useLab.getState();
+  if (tool === "explode") {
+    useLab.getState().setMarker({ x: p.x, y: p.y, z: p.z });
+    window.__lab?.detonate(p.x, p.z, p.y);
+    return true;
+  }
+  if (tool === "meteor") {
+    const power = useLab.getState().explosion.power;
+    sim.spawnMeteor(p.x, p.z, power);
+    useLab.getState().record({
+      t: sim.simTime,
+      type: "meteor",
+      payload: { x: p.x, z: p.z, power },
+    });
+    useLab.getState().setMessage("Meteorito en trayectoria.");
+    return true;
+  }
+  return false;
 }
 
 function handleGround(p: THREE.Vector3) {

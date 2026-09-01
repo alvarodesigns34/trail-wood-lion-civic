@@ -127,9 +127,15 @@ function formatMass(kg: number) {
   return `${formatEs(Math.round(kg))} kg`;
 }
 
-function detonateAt(x?: number, z?: number) {
+/**
+ * `y` sólo llega cuando se hace clic directamente sobre una pieza: en ese caso
+ * la carga estalla justo donde se ha señalado, lo que permite atacar una planta
+ * alta. Al hacer clic en el suelo se usa la altura del foco del panel.
+ */
+function detonateAt(x?: number, z?: number, y?: number) {
   const lab = useLab.getState();
-  const { power, radius, height } = lab.explosion;
+  const { power, radius } = lab.explosion;
+  const height = y ?? lab.explosion.height;
   const px = x ?? lab.marker?.x ?? lab.explosion.x;
   const pz = z ?? lab.marker?.z ?? lab.explosion.z;
   lab.setMarker({ x: px, y: height, z: pz });
@@ -290,8 +296,8 @@ function StartScreen() {
           Entrar al laboratorio
         </button>
         <p className="mt-5 max-w-md text-xs leading-relaxed text-subtle">
-          Clic en el suelo para detonar. Pausa con espacio. El panel izquierdo coloca estructuras y
-          dispara eventos.
+          Clic en el suelo o sobre cualquier pieza para detonar ahí mismo. Pausa con espacio. El
+          panel izquierdo coloca estructuras y dispara eventos.
         </p>
       </div>
     </div>

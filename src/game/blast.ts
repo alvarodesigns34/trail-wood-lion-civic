@@ -76,6 +76,22 @@ export function naturalRadius(charge: number, limit = 5) {
   return lo;
 }
 
+/**
+ * Radio (m, desde el foco) dentro del cual la sobrepresión basta para arruinar
+ * un material de resistencia `strength` kPa.
+ *
+ * Sirve para acotar lo que una carga puede destruir de una sola pieza: media
+ * docena de kilos de explosivo pegados a un forjado de cuarenta metros
+ * cuadrados abren un boquete, no se llevan la planta entera. Sin esta
+ * limitación cualquier carga en contacto destruía la pieza completa por grande
+ * que fuera, y una carga mínima podía tirar un edificio.
+ */
+export function destructiveRadius(charge: number, strength: number) {
+  const w = Math.max(0.01, charge);
+  const limit = Math.max(1, strength * 3);
+  return Math.cbrt((PRESSURE_A * w) / limit);
+}
+
 /* ------------------------------------------------------------------ */
 /* Geometría                                                           */
 /* ------------------------------------------------------------------ */
